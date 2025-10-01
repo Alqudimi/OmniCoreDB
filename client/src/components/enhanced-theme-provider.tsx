@@ -40,6 +40,15 @@ export function EnhancedThemeProvider({ children }: EnhancedThemeProviderProps) 
     root.style.setProperty('--theme-accent', currentColors.accent);
     root.style.setProperty('--theme-dark', currentColors.dark);
     
+    // Convert primary color to RGB for use in rgba()
+    const hexToRGB = (hex: string) => {
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      return `${r}, ${g}, ${b}`;
+    };
+    root.style.setProperty('--theme-primary-rgb', hexToRGB(currentColors.primary));
+    
     // Map theme colors to shadcn/Tailwind CSS variables
     const hexToHSL = (hex: string) => {
       const r = parseInt(hex.slice(1, 3), 16) / 255;

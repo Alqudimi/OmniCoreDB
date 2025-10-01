@@ -161,30 +161,37 @@ Preferred communication style: Simple, everyday language.
 
 ## Running the Application
 
-### Replit Environment Setup (Completed)
+### Replit Environment Setup (Completed - October 2025)
 The application has been successfully configured for Replit:
-1. ✅ Python dependencies installed via `uv sync`
-2. ✅ Node.js dependencies installed via `npm install`
-3. ✅ Frontend built with `npm run build` (creates `dist/public/`)
-4. ✅ Workflow configured to run `python server_py/main.py` on port 5000
-5. ✅ Deployment configured with autoscale: build step runs `npm run build`, run step executes `python server_py/main.py`
+1. ✅ Python 3.11 installed with uv package manager
+2. ✅ Python dependencies installed via `uv sync` (creates `.pythonlibs/` virtual environment)
+3. ✅ Node.js 20 with npm dependencies installed
+4. ✅ Frontend built with `npm run build` (creates `dist/public/`)
+5. ✅ Workflow configured to run `uv run python server_py/main.py` on port 5000
+6. ✅ Deployment configured with autoscale:
+   - Build step: `npm run build && uv sync`
+   - Run step: `uv run python server_py/main.py`
+7. ✅ .gitignore updated with Python-specific patterns
 
 ### Development
-The workflow runs: `python server_py/main.py`
-- Python FastAPI server starts on port 5000
+The workflow runs: `uv run python server_py/main.py`
+- Uses uv to activate virtual environment and run Python
+- Python FastAPI server starts on 0.0.0.0:5000
 - Serves API endpoints at `/api/*`
 - Serves built React frontend from `dist/public/`
 - Single port architecture: both frontend and backend on port 5000
 
 ### Production Deployment
 1. Build frontend: `npm run build` (creates `dist/public/`)
-2. Run Python server: `python server_py/main.py`
-3. Server automatically serves static files from `dist/public/`
-4. All requests route through the Python backend on port 5000
+2. Install Python deps: `uv sync`
+3. Run Python server: `uv run python server_py/main.py`
+4. Server automatically serves static files from `dist/public/`
+5. All requests route through the Python backend on port 5000
 
 ### Environment
-- Python 3.11+ (using uv for package management)
+- Python 3.11.13 (using uv 0.5.11 for package management)
 - Node.js 20+ (for frontend build only)
+- Virtual environment: `.pythonlibs/` (managed by uv)
 - No database required to run the application itself (connects to external databases)
 
 ## Project Structure

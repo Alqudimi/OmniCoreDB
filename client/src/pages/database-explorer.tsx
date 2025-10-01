@@ -17,7 +17,8 @@ import {
   Save,
   Settings,
   Trash2,
-  Activity
+  Activity,
+  Layers
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,13 +27,23 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DataGrid } from "@/components/data-grid";
 import { TableStructure } from "@/components/table-structure";
+import { RelationshipsViewer } from "@/components/relationships-viewer";
+import { IndexesManager } from "@/components/indexes-manager";
+import { ConstraintsManager } from "@/components/constraints-manager";
 import { QueryEditorDialog } from "@/components/query-editor-dialog";
 import { QueryHistoryDialog } from "@/components/query-history-dialog";
 import { SavedQueriesDialog } from "@/components/saved-queries-dialog";
 import { PerformanceDialog } from "@/components/performance-dialog";
 import { BackupDialog } from "@/components/backup-dialog";
+import { TableManagementDialog } from "@/components/table-management-dialog";
+import { TableAnalysisDialog } from "@/components/table-analysis-dialog";
+import { ImportDialog } from "@/components/import-dialog";
+import { BulkOperationsDialog } from "@/components/bulk-operations-dialog";
+import { TableExportDialog } from "@/components/table-export-dialog";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { soundManager } from "@/lib/sounds";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 export default function DatabaseExplorer() {
   const { connectionId } = useParams<{ connectionId: string }>();
@@ -43,6 +54,14 @@ export default function DatabaseExplorer() {
   const [showSavedQueries, setShowSavedQueries] = useState(false);
   const [showPerformance, setShowPerformance] = useState(false);
   const [showBackup, setShowBackup] = useState(false);
+  const [showCreateTable, setShowCreateTable] = useState(false);
+  const [showImportData, setShowImportData] = useState(false);
+  const [showTableAnalysis, setShowTableAnalysis] = useState(false);
+  const [showBulkOperations, setShowBulkOperations] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [showDropDialog, setShowDropDialog] = useState(false);
+  const [showTruncateDialog, setShowTruncateDialog] = useState(false);
+  const { toast } = useToast();
 
   const { data: connection } = useQuery<any>({
     queryKey: [`/api/connections`],
@@ -62,6 +81,41 @@ export default function DatabaseExplorer() {
   const filteredTables = tables?.filter(table =>
     table.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const dropTableMutation = useMutation({
+    mutationFn: async (tableName: string) => {
+      const res = await apiRequest('DELETE', `/api/connections/${connectionId}/tables/${tableName}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/connections/${connectionId}/tables`] });
+      soundManager.success();
+      toast({ title: "Success", description: "Table dropped successfully" });
+      setSelectedTable(null);
+      setShowDropDialog(false);
+    },
+    onError: (error: Error) => {
+      soundManager.error();
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const truncateTableMutation = useMutation({
+    mutationFn: async (tableName: string) => {
+      const res = await apiRequest('POST', `/api/connections/${connectionId}/tables/${tableName}/truncate`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/connections/${connectionId}/tables/${selectedTable}/rows`] });
+      soundManager.success();
+      toast({ title: "Success", description: "Table truncated successfully" });
+      setShowTruncateDialog(false);
+    },
+    onError: (error: Error) => {
+      soundManager.error();
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
@@ -188,7 +242,10 @@ export default function DatabaseExplorer() {
                   variant="ghost"
                   className="w-full justify-start gap-2"
                   size="sm"
-                  onClick={() => soundManager.click()}
+                  onClick={() => {
+                    setShowCreateTable(true);
+                    soundManager.open();
+                  }}
                   data-testid="button-create-table"
                 >
                   <Plus className="w-4 h-4" />
@@ -198,7 +255,14 @@ export default function DatabaseExplorer() {
                   variant="ghost"
                   className="w-full justify-start gap-2"
                   size="sm"
-                  onClick={() => soundManager.click()}
+                  onClick={() => {
+                    if (!selectedTable) {
+                      toast({ title: "No Table Selected", description: "Please select a table first", variant: "destructive" });
+                      return;
+                    }
+                    setShowImportData(true);
+                    soundManager.open();
+                  }}
                   data-testid="button-import-data"
                 >
                   <Upload className="w-4 h-4" />
@@ -208,21 +272,35 @@ export default function DatabaseExplorer() {
                   variant="ghost"
                   className="w-full justify-start gap-2"
                   size="sm"
-                  onClick={() => soundManager.click()}
-                  data-testid="button-performance"
+                  onClick={() => {
+                    if (!selectedTable) {
+                      toast({ title: "No Table Selected", description: "Please select a table first", variant: "destructive" });
+                      return;
+                    }
+                    setShowBulkOperations(true);
+                    soundManager.open();
+                  }}
+                  data-testid="button-bulk-operations"
                 >
-                  <BarChart3 className="w-4 h-4" />
-                  Performance
+                  <Layers className="w-4 h-4" />
+                  Bulk Operations
                 </Button>
                 <Button
                   variant="ghost"
                   className="w-full justify-start gap-2"
                   size="sm"
-                  onClick={() => soundManager.click()}
-                  data-testid="button-backups"
+                  onClick={() => {
+                    if (!selectedTable) {
+                      toast({ title: "No Table Selected", description: "Please select a table first", variant: "destructive" });
+                      return;
+                    }
+                    setShowExportDialog(true);
+                    soundManager.open();
+                  }}
+                  data-testid="button-export-table"
                 >
-                  <Save className="w-4 h-4" />
-                  Backups
+                  <Download className="w-4 h-4" />
+                  Export Table
                 </Button>
               </div>
             </Card>
@@ -323,15 +401,36 @@ export default function DatabaseExplorer() {
                       variant="ghost"
                       size="sm"
                       className="gap-2"
-                      data-testid="button-table-settings"
+                      onClick={() => {
+                        setShowTableAnalysis(true);
+                        soundManager.open();
+                      }}
+                      data-testid="button-table-analysis"
                     >
-                      <Settings className="w-4 h-4" />
-                      Settings
+                      <BarChart3 className="w-4 h-4" />
+                      Analysis
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="gap-2"
+                      onClick={() => {
+                        setShowTruncateDialog(true);
+                        soundManager.click();
+                      }}
+                      data-testid="button-truncate-table"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Truncate
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
                       className="gap-2 text-destructive"
+                      onClick={() => {
+                        setShowDropDialog(true);
+                        soundManager.click();
+                      }}
                       data-testid="button-drop-table"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -346,6 +445,7 @@ export default function DatabaseExplorer() {
                     <TabsTrigger value="structure" data-testid="tab-structure">Structure</TabsTrigger>
                     <TabsTrigger value="relationships" data-testid="tab-relationships">Relationships</TabsTrigger>
                     <TabsTrigger value="indexes" data-testid="tab-indexes">Indexes</TabsTrigger>
+                    <TabsTrigger value="constraints" data-testid="tab-constraints">Constraints</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="data">
@@ -363,15 +463,24 @@ export default function DatabaseExplorer() {
                   </TabsContent>
 
                   <TabsContent value="relationships">
-                    <div className="text-center py-12 text-muted-foreground">
-                      Relationship viewer coming soon
-                    </div>
+                    <RelationshipsViewer
+                      connectionId={connectionId!}
+                      tableName={selectedTable}
+                    />
                   </TabsContent>
 
                   <TabsContent value="indexes">
-                    <div className="text-center py-12 text-muted-foreground">
-                      Index management coming soon
-                    </div>
+                    <IndexesManager
+                      connectionId={connectionId!}
+                      tableName={selectedTable}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="constraints">
+                    <ConstraintsManager
+                      connectionId={connectionId!}
+                      tableName={selectedTable}
+                    />
                   </TabsContent>
                 </Tabs>
               </Card>
@@ -451,6 +560,91 @@ export default function DatabaseExplorer() {
           setShowBackup(open);
           if (!open) soundManager.close();
         }}
+      />
+
+      {/* Create Table Dialog */}
+      <TableManagementDialog
+        connectionId={connectionId!}
+        open={showCreateTable}
+        onOpenChange={(open) => {
+          setShowCreateTable(open);
+          if (!open) soundManager.close();
+        }}
+        mode="create"
+      />
+
+      {/* Import Data Dialog */}
+      {selectedTable && (
+        <ImportDialog
+          connectionId={connectionId!}
+          tableName={selectedTable}
+          open={showImportData}
+          onOpenChange={(open) => {
+            setShowImportData(open);
+            if (!open) soundManager.close();
+          }}
+        />
+      )}
+
+      {/* Table Analysis Dialog */}
+      {selectedTable && (
+        <TableAnalysisDialog
+          connectionId={connectionId!}
+          tableName={selectedTable}
+          open={showTableAnalysis}
+          onOpenChange={(open) => {
+            setShowTableAnalysis(open);
+            if (!open) soundManager.close();
+          }}
+        />
+      )}
+
+      {/* Bulk Operations Dialog */}
+      {selectedTable && (
+        <BulkOperationsDialog
+          connectionId={connectionId!}
+          tableName={selectedTable}
+          open={showBulkOperations}
+          onOpenChange={(open) => {
+            setShowBulkOperations(open);
+            if (!open) soundManager.close();
+          }}
+        />
+      )}
+
+      {/* Export Dialog */}
+      {selectedTable && (
+        <TableExportDialog
+          connectionId={connectionId!}
+          tableName={selectedTable}
+          open={showExportDialog}
+          onOpenChange={(open) => {
+            setShowExportDialog(open);
+            if (!open) soundManager.close();
+          }}
+        />
+      )}
+
+      {/* Drop Table Dialog */}
+      <ConfirmationDialog
+        open={showDropDialog}
+        onOpenChange={setShowDropDialog}
+        title="Drop Table"
+        description={`Are you sure you want to drop table "${selectedTable}"? This will permanently delete the table and all its data. This action cannot be undone.`}
+        onConfirm={() => selectedTable && dropTableMutation.mutate(selectedTable)}
+        confirmText="Drop Table"
+        variant="danger"
+      />
+
+      {/* Truncate Table Dialog */}
+      <ConfirmationDialog
+        open={showTruncateDialog}
+        onOpenChange={setShowTruncateDialog}
+        title="Truncate Table"
+        description={`Are you sure you want to truncate table "${selectedTable}"? This will delete all rows but keep the table structure. This action cannot be undone.`}
+        onConfirm={() => selectedTable && truncateTableMutation.mutate(selectedTable)}
+        confirmText="Truncate Table"
+        variant="danger"
       />
     </div>
   );

@@ -8,16 +8,12 @@ packages = ["glibcLocales"]
 
 [deployment]
 deploymentTarget = "autoscale"
-build = ["npm", "run", "build"]
-run = ["python", "server_py/main.py"]
+build = ["sh", "-c", "npm run build && uv sync"]
+run = ["uv", "run", "python", "server_py/main.py"]
 
 [[ports]]
 localPort = 5000
 externalPort = 80
-
-[[ports]]
-localPort = 39623
-externalPort = 3000
 
 [[ports]]
 localPort = 40371
@@ -51,7 +47,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python server_py/main.py"
+args = "uv run python server_py/main.py"
 waitForPort = 5000
 
 [agent]

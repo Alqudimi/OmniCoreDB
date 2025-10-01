@@ -528,8 +528,11 @@ async def create_backup(connection_id: str, request: models.BackupRequest):
         )
         
         # Save backup metadata
-        table_list = request.tables if request.tables else db_service.get_tables(connection_id)
-        table_names = [t.name for t in table_list] if not request.tables else request.tables
+        if request.tables:
+            table_names = request.tables
+        else:
+            table_list = db_service.get_tables(connection_id)
+            table_names = [t.name for t in table_list]
         
         metadata = storage.create_backup_metadata(
             connection_id,

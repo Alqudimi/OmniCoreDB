@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "python-3.11", "web"]
+modules = ["nodejs-20", "python-3.11", "web", "python3"]
 run = "npm run dev"
 hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
@@ -9,14 +9,18 @@ packages = ["glibcLocales"]
 [deployment]
 deploymentTarget = "autoscale"
 build = ["npm", "run", "build"]
-run = ["npm", "run", "start"]
+run = ["python", "server_py/main.py"]
 
 [[ports]]
 localPort = 5000
 externalPort = 80
 
 [[ports]]
-localPort = 42063
+localPort = 37425
+externalPort = 3001
+
+[[ports]]
+localPort = 39623
 externalPort = 3000
 
 [env]
@@ -43,7 +47,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npm run dev"
+args = "python server_py/main.py"
 waitForPort = 5000
 
 [agent]

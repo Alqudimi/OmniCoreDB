@@ -16,7 +16,8 @@ import {
   History,
   Save,
   Settings,
-  Trash2
+  Trash2,
+  Activity
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,10 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DataGrid } from "@/components/data-grid";
 import { TableStructure } from "@/components/table-structure";
 import { QueryEditorDialog } from "@/components/query-editor-dialog";
+import { QueryHistoryDialog } from "@/components/query-history-dialog";
+import { SavedQueriesDialog } from "@/components/saved-queries-dialog";
+import { PerformanceDialog } from "@/components/performance-dialog";
+import { BackupDialog } from "@/components/backup-dialog";
 import { soundManager } from "@/lib/sounds";
 import { queryClient } from "@/lib/queryClient";
 
@@ -34,6 +39,10 @@ export default function DatabaseExplorer() {
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showQueryEditor, setShowQueryEditor] = useState(false);
+  const [showQueryHistory, setShowQueryHistory] = useState(false);
+  const [showSavedQueries, setShowSavedQueries] = useState(false);
+  const [showPerformance, setShowPerformance] = useState(false);
+  const [showBackup, setShowBackup] = useState(false);
 
   const { data: connection } = useQuery<any>({
     queryKey: [`/api/connections`],
@@ -83,7 +92,7 @@ export default function DatabaseExplorer() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Button
                 variant="ghost"
                 size="sm"
@@ -114,10 +123,53 @@ export default function DatabaseExplorer() {
                 variant="ghost"
                 size="sm"
                 className="gap-2"
-                data-testid="button-export"
+                onClick={() => {
+                  setShowSavedQueries(true);
+                  soundManager.open();
+                }}
+                data-testid="button-saved-queries"
               >
-                <Download className="w-4 h-4" />
-                Export
+                <Save className="w-4 h-4" />
+                Saved
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-2"
+                onClick={() => {
+                  setShowQueryHistory(true);
+                  soundManager.open();
+                }}
+                data-testid="button-history"
+              >
+                <History className="w-4 h-4" />
+                History
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-2"
+                onClick={() => {
+                  setShowPerformance(true);
+                  soundManager.open();
+                }}
+                data-testid="button-performance"
+              >
+                <Activity className="w-4 h-4" />
+                Performance
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-2"
+                onClick={() => {
+                  setShowBackup(true);
+                  soundManager.open();
+                }}
+                data-testid="button-backup"
+              >
+                <Database className="w-4 h-4" />
+                Backup
               </Button>
             </div>
           </div>
@@ -354,6 +406,52 @@ export default function DatabaseExplorer() {
           }}
         />
       )}
+
+      {/* Query History Dialog */}
+      <QueryHistoryDialog
+        connectionId={connectionId!}
+        open={showQueryHistory}
+        onOpenChange={(open) => {
+          setShowQueryHistory(open);
+          if (!open) soundManager.close();
+        }}
+        onExecuteQuery={(query) => {
+          setShowQueryEditor(true);
+        }}
+      />
+
+      {/* Saved Queries Dialog */}
+      <SavedQueriesDialog
+        connectionId={connectionId!}
+        open={showSavedQueries}
+        onOpenChange={(open) => {
+          setShowSavedQueries(open);
+          if (!open) soundManager.close();
+        }}
+        onExecuteQuery={(query) => {
+          setShowQueryEditor(true);
+        }}
+      />
+
+      {/* Performance Dialog */}
+      <PerformanceDialog
+        connectionId={connectionId!}
+        open={showPerformance}
+        onOpenChange={(open) => {
+          setShowPerformance(open);
+          if (!open) soundManager.close();
+        }}
+      />
+
+      {/* Backup Dialog */}
+      <BackupDialog
+        connectionId={connectionId!}
+        open={showBackup}
+        onOpenChange={(open) => {
+          setShowBackup(open);
+          if (!open) soundManager.close();
+        }}
+      />
     </div>
   );
 }

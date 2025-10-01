@@ -43,6 +43,20 @@ Preferred communication style: Simple, everyday language.
 - Export and import options (CSV, JSON, SQL dump)
 - Search functionality across table data
 
+**Advanced Dialog Features**
+- **Query History Dialog**: Track all executed queries with timestamps, execution times, and success status
+- **Saved Queries Dialog**: Save, manage, and execute frequently used SQL queries
+- **Performance Monitoring Dialog**: View metrics, track slow queries, and monitor database performance
+- **Backup & Restore Dialog**: Create backups in JSON or SQL format with schema/data options
+
+**Enhanced UI/UX**
+- Modern animations including shimmer, glow, pulse, and gradient-shift effects
+- Sophisticated keyframe animations for smooth transitions
+- Glass morphism effects on cards and dialogs
+- Sound effects system for user interactions (click, hover, success, error, open/close)
+- 7 theme color palettes: Sunset Passion, Purple Dream, Earth Tone, Nature Green, Ocean Blue, Fire Red, Emerald Gradient
+- Responsive toolbar with quick access to all database management features
+
 ### Backend Architecture
 
 **Server Framework**
@@ -147,11 +161,20 @@ Preferred communication style: Simple, everyday language.
 
 ## Running the Application
 
+### Replit Environment Setup (Completed)
+The application has been successfully configured for Replit:
+1. ✅ Python dependencies installed via `uv sync`
+2. ✅ Node.js dependencies installed via `npm install`
+3. ✅ Frontend built with `npm run build` (creates `dist/public/`)
+4. ✅ Workflow configured to run `python server_py/main.py` on port 5000
+5. ✅ Deployment configured with autoscale: build step runs `npm run build`, run step executes `python server_py/main.py`
+
 ### Development
-The workflow runs: `cd server_py && python main.py`
+The workflow runs: `python server_py/main.py`
 - Python FastAPI server starts on port 5000
 - Serves API endpoints at `/api/*`
-- Note: In development, you may need to build the frontend first with `npm run build`
+- Serves built React frontend from `dist/public/`
+- Single port architecture: both frontend and backend on port 5000
 
 ### Production Deployment
 1. Build frontend: `npm run build` (creates `dist/public/`)
@@ -160,7 +183,7 @@ The workflow runs: `cd server_py && python main.py`
 4. All requests route through the Python backend on port 5000
 
 ### Environment
-- Python 3.11+
+- Python 3.11+ (using uv for package management)
 - Node.js 20+ (for frontend build only)
 - No database required to run the application itself (connects to external databases)
 

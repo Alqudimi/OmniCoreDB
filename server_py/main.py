@@ -6,7 +6,9 @@ from typing import Optional, Dict, Any
 from models import (
     InsertConnectionConfig, CreateTableRequest, RenameTableRequest,
     AddColumnRequest, ModifyColumnRequest, ExecuteQueryRequest,
-    ImportDataRequest, ImportDataResponse
+    ImportDataRequest, ImportDataResponse, BulkInsertRequest,
+    BulkUpdateRequest, BulkDeleteRequest, CreateIndexRequest,
+    ConstraintRequest
 )
 from database_service import db_service
 from storage import storage
@@ -158,8 +160,24 @@ async def execute_query(connection_id: str, request: ExecuteQueryRequest):
     """Execute a custom SQL query"""
     try:
         result = db_service.execute_query(connection_id, request.query)
+        # Save to query history
+        storage.add_query_history(
+            connection_id, 
+            request.query, 
+            result.executionTime, 
+            True, 
+            result.rowCount
+        )
         return result.model_dump()
     except Exception as e:
+        # Save failed query to history
+        storage.add_query_history(
+            connection_id, 
+            request.query, 
+            0.0, 
+            False, 
+            error=str(e)
+        )
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -276,6 +294,148 @@ async def import_data(connection_id: str, table_name: str, request: ImportDataRe
         return result
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# Query History Routes
+@app.get("/api/connections/{connection_id}/query-history")
+async def get_query_history(connection_id: str, limit: int = 50):
+    """Get query history for a connection"""
+    try:
+        history = storage.get_query_history(connection_id, limit)
+        return [h.model_dump() for h in history]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/connections/{connection_id}/query-history")
+async def clear_query_history(connection_id: str):
+    """Clear query history for a connection"""
+    try:
+        storage.clear_query_history(connection_id)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Bulk Operations Routes
+@app.post("/api/connections/{connection_id}/tables/{table_name}/bulk-insert")
+async def bulk_insert(connection_id: str, table_name: str, request: BulkInsertRequest):
+    """Bulk insert rows"""
+    try:
+        result = db_service.bulk_insert(connection_id, table_name, request.rows)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/connections/{connection_id}/tables/{table_name}/bulk-update")
+async def bulk_update(connection_id: str, table_name: str, request: BulkUpdateRequest):
+    """Bulk update rows"""
+    try:
+        updated = db_service.bulk_update(connection_id, table_name, request.updates, request.where)
+        return {"updated": updated}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/connections/{connection_id}/tables/{table_name}/bulk-delete")
+async def bulk_delete(connection_id: str, table_name: str, request: BulkDeleteRequest):
+    """Bulk delete rows"""
+    try:
+        deleted = db_service.bulk_delete(connection_id, table_name, request.ids)
+        return {"deleted": deleted}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# Relationship Routes
+@app.get("/api/connections/{connection_id}/relationships")
+async def get_relationships(connection_id: str, tableName: Optional[str] = None):
+    """Get table relationships"""
+    try:
+        relationships = db_service.get_table_relationships(connection_id, tableName)
+        return relationships
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Index Management Routes
+@app.post("/api/connections/{connection_id}/tables/{table_name}/indexes")
+async def create_index(connection_id: str, table_name: str, request: CreateIndexRequest):
+    """Create an index"""
+    try:
+        db_service.create_index(connection_id, table_name, request.indexName, request.columns, request.unique)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.delete("/api/connections/{connection_id}/tables/{table_name}/indexes/{index_name}")
+async def drop_index(connection_id: str, table_name: str, index_name: str):
+    """Drop an index"""
+    try:
+        db_service.drop_index(connection_id, index_name, table_name)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/connections/{connection_id}/tables/{table_name}/index-suggestions")
+async def get_index_suggestions(connection_id: str, table_name: str):
+    """Get index suggestions"""
+    try:
+        suggestions = db_service.get_index_suggestions(connection_id, table_name)
+        return suggestions
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Constraint Management Routes
+@app.post("/api/connections/{connection_id}/tables/{table_name}/constraints")
+async def add_constraint(connection_id: str, table_name: str, request: ConstraintRequest):
+    """Add a constraint"""
+    try:
+        db_service.add_constraint(
+            connection_id, table_name, request.constraintType,
+            request.constraintName, request.columns,
+            expression=request.expression,
+            referencedTable=request.referencedTable,
+            referencedColumns=request.referencedColumns
+        )
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.delete("/api/connections/{connection_id}/tables/{table_name}/constraints/{constraint_name}")
+async def drop_constraint(connection_id: str, table_name: str, constraint_name: str):
+    """Drop a constraint"""
+    try:
+        db_service.drop_constraint(connection_id, table_name, constraint_name)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/connections/{connection_id}/tables/{table_name}/constraints")
+async def get_constraints(connection_id: str, table_name: str):
+    """Get table constraints"""
+    try:
+        constraints = db_service.get_table_constraints(connection_id, table_name)
+        return constraints
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Table Analysis Route
+@app.get("/api/connections/{connection_id}/tables/{table_name}/analyze")
+async def analyze_table(connection_id: str, table_name: str):
+    """Analyze table and get statistics"""
+    try:
+        analysis = db_service.analyze_table(connection_id, table_name)
+        return analysis
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Serve frontend static files

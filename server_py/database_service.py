@@ -509,6 +509,260 @@ class DatabaseService:
             if col.primaryKey:
                 return col.name
         return 'id'
+    
+    def bulk_insert(self, connection_id: str, table_name: str, rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Bulk insert rows"""
+        engine = self.get_connection(connection_id)
+        inserted = 0
+        errors = []
+        
+        with engine.connect() as conn:
+            for i, row in enumerate(rows):
+                try:
+                    cols = ", ".join(row.keys())
+                    placeholders = ", ".join([f":{k}" for k in row.keys()])
+                    query = f"INSERT INTO {table_name} ({cols}) VALUES ({placeholders})"
+                    conn.execute(text(query), row)
+                    inserted += 1
+                except Exception as e:
+                    errors.append(f"Row {i + 1}: {str(e)}")
+            
+            conn.commit()
+        
+        return {"inserted": inserted, "errors": errors}
+    
+    def bulk_update(self, connection_id: str, table_name: str, updates: Dict[str, Any], where: Dict[str, Any]) -> int:
+        """Bulk update rows matching criteria"""
+        engine = self.get_connection(connection_id)
+        
+        set_clause = ", ".join([f"{k} = :{k}" for k in updates.keys()])
+        where_clause = " AND ".join([f"{k} = :where_{k}" for k in where.keys()])
+        
+        params = updates.copy()
+        for k, v in where.items():
+            params[f"where_{k}"] = v
+        
+        query = f"UPDATE {table_name} SET {set_clause} WHERE {where_clause}"
+        
+        with engine.connect() as conn:
+            result = conn.execute(text(query), params)
+            conn.commit()
+            return result.rowcount
+    
+    def bulk_delete(self, connection_id: str, table_name: str, ids: List[Any]) -> int:
+        """Bulk delete rows by ID"""
+        engine = self.get_connection(connection_id)
+        pk_column = self._get_primary_key_column(connection_id, table_name)
+        
+        with engine.connect() as conn:
+            deleted = 0
+            for row_id in ids:
+                query = f"DELETE FROM {table_name} WHERE {pk_column} = :id"
+                result = conn.execute(text(query), {"id": row_id})
+                deleted += result.rowcount
+            
+            conn.commit()
+            return deleted
+    
+    def get_table_relationships(self, connection_id: str, table_name: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get foreign key relationships"""
+        engine = self.get_connection(connection_id)
+        inspector = inspect(engine)
+        relationships = []
+        
+        tables = [table_name] if table_name else inspector.get_table_names()
+        
+        for tbl in tables:
+            fks = inspector.get_foreign_keys(tbl)
+            for fk in fks:
+                relationships.append({
+                    "fromTable": tbl,
+                    "fromColumn": ", ".join(fk["constrained_columns"]),
+                    "toTable": fk["referred_table"],
+                    "toColumn": ", ".join(fk["referred_columns"]),
+                    "onDelete": fk.get("ondelete"),
+                    "onUpdate": fk.get("onupdate")
+                })
+        
+        return relationships
+    
+    def create_index(self, connection_id: str, table_name: str, index_name: str, columns: List[str], unique: bool = False) -> None:
+        """Create an index"""
+        engine = self.get_connection(connection_id)
+        
+        unique_clause = "UNIQUE " if unique else ""
+        cols = ", ".join(columns)
+        query = f"CREATE {unique_clause}INDEX {index_name} ON {table_name} ({cols})"
+        
+        with engine.connect() as conn:
+            conn.execute(text(query))
+            conn.commit()
+    
+    def drop_index(self, connection_id: str, index_name: str, table_name: Optional[str] = None) -> None:
+        """Drop an index"""
+        engine = self.get_connection(connection_id)
+        
+        if engine.dialect.name == 'sqlite':
+            query = f"DROP INDEX {index_name}"
+        elif engine.dialect.name == 'mysql':
+            if not table_name:
+                raise ValueError("Table name required for MySQL")
+            query = f"DROP INDEX {index_name} ON {table_name}"
+        else:  # PostgreSQL
+            query = f"DROP INDEX {index_name}"
+        
+        with engine.connect() as conn:
+            conn.execute(text(query))
+            conn.commit()
+    
+    def get_index_suggestions(self, connection_id: str, table_name: str) -> List[Dict[str, Any]]:
+        """Analyze table and suggest indexes"""
+        engine = self.get_connection(connection_id)
+        inspector = inspect(engine)
+        suggestions = []
+        
+        # Get foreign key columns
+        fks = inspector.get_foreign_keys(table_name)
+        existing_indexes = inspector.get_indexes(table_name)
+        indexed_cols = set()
+        for idx in existing_indexes:
+            indexed_cols.update(idx["column_names"])
+        
+        # Suggest indexes for foreign key columns
+        for fk in fks:
+            for col in fk["constrained_columns"]:
+                if col not in indexed_cols:
+                    suggestions.append({
+                        "table": table_name,
+                        "columns": [col],
+                        "reason": f"Foreign key column '{col}' is not indexed",
+                        "impact": "high"
+                    })
+        
+        # Check for frequently queried columns (basic heuristic)
+        columns = inspector.get_columns(table_name)
+        for col in columns:
+            col_name = col["name"]
+            if col_name not in indexed_cols and col["type"].__class__.__name__ in ["VARCHAR", "INTEGER"]:
+                suggestions.append({
+                    "table": table_name,
+                    "columns": [col_name],
+                    "reason": f"Column '{col_name}' may benefit from an index",
+                    "impact": "medium"
+                })
+        
+        return suggestions[:5]  # Return top 5 suggestions
+    
+    def add_constraint(self, connection_id: str, table_name: str, constraint_type: str, 
+                      constraint_name: str, columns: List[str], **kwargs) -> None:
+        """Add a constraint to a table"""
+        engine = self.get_connection(connection_id)
+        
+        if constraint_type == "check":
+            expression = kwargs.get("expression")
+            if not expression:
+                raise ValueError("Check constraint requires expression")
+            query = f"ALTER TABLE {table_name} ADD CONSTRAINT {constraint_name} CHECK ({expression})"
+        
+        elif constraint_type == "unique":
+            cols = ", ".join(columns)
+            query = f"ALTER TABLE {table_name} ADD CONSTRAINT {constraint_name} UNIQUE ({cols})"
+        
+        elif constraint_type == "foreign_key":
+            ref_table = kwargs.get("referencedTable")
+            ref_cols = kwargs.get("referencedColumns", [])
+            if not ref_table or not ref_cols:
+                raise ValueError("Foreign key constraint requires referenced table and columns")
+            
+            cols = ", ".join(columns)
+            ref_cols_str = ", ".join(ref_cols)
+            query = f"ALTER TABLE {table_name} ADD CONSTRAINT {constraint_name} FOREIGN KEY ({cols}) REFERENCES {ref_table} ({ref_cols_str})"
+        
+        else:
+            raise ValueError(f"Unsupported constraint type: {constraint_type}")
+        
+        with engine.connect() as conn:
+            conn.execute(text(query))
+            conn.commit()
+    
+    def drop_constraint(self, connection_id: str, table_name: str, constraint_name: str) -> None:
+        """Drop a constraint"""
+        engine = self.get_connection(connection_id)
+        
+        query = f"ALTER TABLE {table_name} DROP CONSTRAINT {constraint_name}"
+        
+        with engine.connect() as conn:
+            conn.execute(text(query))
+            conn.commit()
+    
+    def get_table_constraints(self, connection_id: str, table_name: str) -> List[Dict[str, Any]]:
+        """Get all constraints for a table"""
+        engine = self.get_connection(connection_id)
+        inspector = inspect(engine)
+        constraints = []
+        
+        # Get unique constraints
+        unique_constraints = inspector.get_unique_constraints(table_name)
+        for uc in unique_constraints:
+            constraints.append({
+                "name": uc.get("name"),
+                "type": "UNIQUE",
+                "columns": uc.get("column_names", [])
+            })
+        
+        # Get check constraints (if supported)
+        try:
+            check_constraints = inspector.get_check_constraints(table_name)
+            for cc in check_constraints:
+                constraints.append({
+                    "name": cc.get("name"),
+                    "type": "CHECK",
+                    "expression": cc.get("sqltext")
+                })
+        except:
+            pass  # Not all databases support check constraints
+        
+        # Get foreign key constraints
+        fk_constraints = inspector.get_foreign_keys(table_name)
+        for fk in fk_constraints:
+            constraints.append({
+                "name": fk.get("name"),
+                "type": "FOREIGN KEY",
+                "columns": fk.get("constrained_columns", []),
+                "referencedTable": fk.get("referred_table"),
+                "referencedColumns": fk.get("referred_columns", [])
+            })
+        
+        return constraints
+    
+    def analyze_table(self, connection_id: str, table_name: str) -> Dict[str, Any]:
+        """Analyze table and provide statistics"""
+        engine = self.get_connection(connection_id)
+        inspector = inspect(engine)
+        
+        # Get row count
+        with engine.connect() as conn:
+            result = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
+            row_count = result.scalar()
+        
+        # Get columns
+        columns = inspector.get_columns(table_name)
+        
+        # Get indexes
+        indexes = inspector.get_indexes(table_name)
+        
+        # Get foreign keys
+        foreign_keys = inspector.get_foreign_keys(table_name)
+        
+        return {
+            "tableName": table_name,
+            "rowCount": row_count,
+            "columnCount": len(columns),
+            "indexCount": len(indexes),
+            "foreignKeyCount": len(foreign_keys),
+            "columns": [{"name": col["name"], "type": str(col["type"])} for col in columns],
+            "indexes": [{"name": idx["name"], "columns": idx["column_names"], "unique": idx["unique"]} for idx in indexes]
+        }
 
 
 # Global database service instance

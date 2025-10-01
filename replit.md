@@ -179,11 +179,10 @@ The workflow runs: `cd server_py && python main.py`
 │   ├── models.py         # Pydantic models
 │   ├── database_service.py  # SQLAlchemy database operations
 │   └── storage.py        # In-memory connection storage
-├── shared/               # Shared TypeScript types (legacy from Node.js version)
 ├── dist/                 # Built frontend (generated)
 │   └── public/          # Static files served by Python backend
 ├── pyproject.toml        # Python dependencies
-├── package.json          # Node.js dependencies (frontend build)
+├── package.json          # Node.js dependencies (frontend build only)
 └── vite.config.ts        # Vite configuration
 
 ```
@@ -197,9 +196,15 @@ The workflow runs: `cd server_py && python main.py`
 ✅ **Row CRUD Operations** - Insert, update, delete with data validation
 ✅ **Pagination & Search** - Browse large tables efficiently
 ✅ **Custom SQL Queries** - Execute any SQL with result display and timing
+✅ **Query History** - Track all queries with timestamps, execution times, and success status
+✅ **Bulk Operations** - Bulk insert, update, and delete for efficient mass data manipulation
 ✅ **Data Export** - Export to JSON, CSV, or SQL dump format
 ✅ **Data Import** - Import from JSON or CSV with error handling
 ✅ **Schema Inspection** - View columns, types, constraints, indexes, foreign keys
+✅ **Table Relationships** - Visualize and analyze foreign key relationships across tables
+✅ **Index Management** - Create/drop indexes with AI-powered optimization suggestions
+✅ **Constraint Management** - Add/drop/view constraints (CHECK, UNIQUE, FOREIGN KEY)
+✅ **Table Analysis** - Comprehensive table statistics and performance insights
 ✅ **Dark/Light Theme** - User preference with system default detection
 ✅ **Responsive Design** - Works on desktop and mobile devices
 ✅ **Error Handling** - Clear error messages throughout the application
@@ -218,9 +223,22 @@ The application is production-ready with:
 
 ## Recent Changes (October 2025)
 
-- Migrated backend from Node.js/TypeScript (Express + Knex) to Python (FastAPI + SQLAlchemy)
+### Backend Migration & Cleanup
+- **Complete migration to Python backend**: Removed all Node.js backend code (Express + Knex)
+- Implemented full Python FastAPI backend with SQLAlchemy for database abstraction
 - Updated all API endpoints to use FastAPI route decorators
 - Implemented Pydantic models for request/response validation
 - Configured Python backend to serve built React frontend in production
-- Maintained all existing functionality during migration
-- Updated deployment configuration for Python backend
+- Cleaned up package.json to only include frontend build scripts
+- Removed obsolete Node.js backend directories (server/, shared/) and configuration files
+- Removed test database files and unused documentation
+- Updated deployment configuration for Python-only backend
+
+### Advanced Features Added
+- **Query History System**: Automatic tracking of all SQL queries with execution times, timestamps, and success status
+- **Bulk Operations**: Efficient mass data manipulation with bulk insert, update, and delete operations
+- **Table Relationships**: Foreign key visualization and relationship analysis across all tables
+- **Index Management**: Create and drop indexes with intelligent optimization suggestions
+- **Constraint Management**: Full support for CHECK, UNIQUE, and FOREIGN KEY constraints
+- **Table Analysis**: Comprehensive statistics including row counts, indexes, and performance metrics
+- **34 RESTful API Endpoints**: Complete coverage of all database management operations

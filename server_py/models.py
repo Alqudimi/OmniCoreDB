@@ -100,3 +100,83 @@ class ImportDataRequest(BaseModel):
 class ImportDataResponse(BaseModel):
     imported: int
     errors: List[str]
+
+
+class QueryHistory(BaseModel):
+    id: str
+    connectionId: str
+    query: str
+    timestamp: str
+    executionTime: float
+    success: bool
+    rowCount: Optional[int] = None
+    error: Optional[str] = None
+
+
+class BulkInsertRequest(BaseModel):
+    rows: List[Dict[str, Any]]
+
+
+class BulkUpdateRequest(BaseModel):
+    updates: Dict[str, Any]
+    where: Dict[str, Any]
+
+
+class BulkDeleteRequest(BaseModel):
+    ids: List[Any]
+
+
+class BackupRequest(BaseModel):
+    format: Literal["sql", "json"] = "sql"
+    tables: Optional[List[str]] = None
+    includeSchema: bool = True
+    includeData: bool = True
+
+
+class BackupResponse(BaseModel):
+    filename: str
+    size: int
+    timestamp: str
+
+
+class RestoreRequest(BaseModel):
+    backup: str
+    format: Literal["sql", "json"] = "sql"
+
+
+class TableRelationship(BaseModel):
+    fromTable: str
+    fromColumn: str
+    toTable: str
+    toColumn: str
+    onDelete: Optional[str] = None
+    onUpdate: Optional[str] = None
+
+
+class IndexSuggestion(BaseModel):
+    table: str
+    columns: List[str]
+    reason: str
+    impact: Literal["high", "medium", "low"]
+
+
+class ValidationRule(BaseModel):
+    column: str
+    rule: str
+    message: str
+    enabled: bool = True
+
+
+class CreateIndexRequest(BaseModel):
+    indexName: str
+    columns: List[str]
+    unique: bool = False
+
+
+class ConstraintRequest(BaseModel):
+    constraintType: Literal["check", "unique", "foreign_key"]
+    constraintName: str
+    columns: List[str]
+    expression: Optional[str] = None
+    referencedTable: Optional[str] = None
+    referencedColumns: Optional[List[str]] = None

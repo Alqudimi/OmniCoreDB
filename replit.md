@@ -2,9 +2,9 @@
 
 ## Overview
 
-This is a full-stack database management application that provides a visual interface for connecting to and managing multiple database types. The application allows users to connect to SQLite, PostgreSQL, MySQL, and MongoDB databases, browse tables, view and edit data, execute custom queries, and export data in various formats.
+This is a comprehensive full-stack database management application that provides a visual interface for connecting to and managing multiple database types. The application allows users to connect to SQLite, PostgreSQL, and MySQL databases, browse tables, view and edit data, execute custom queries, and export/import data in various formats.
 
-The application is built with a React frontend using shadcn/ui components and an Express backend with TypeScript. It supports multiple database connections simultaneously and provides features like data grid viewing, row editing, table structure inspection, and SQL query execution.
+The application is built with a **React frontend** using shadcn/ui components and a **Python FastAPI backend**. It supports multiple database connections simultaneously and provides features like data grid viewing, row editing, table structure inspection, SQL query execution, and data export/import capabilities.
 
 ## User Preferences
 
@@ -16,7 +16,7 @@ Preferred communication style: Simple, everyday language.
 
 **Framework and Build System**
 - React 18+ with TypeScript for type safety
-- Vite as the build tool and dev server
+- Vite as the build tool and dev server for development
 - Wouter for lightweight client-side routing
 - TanStack Query (React Query) for server state management with infinite stale time to prevent unnecessary refetches
 
@@ -34,49 +34,65 @@ Preferred communication style: Simple, everyday language.
 - No global state management library needed due to React Query handling server state
 
 **Key UI Features**
-- Connection management dialog for adding databases
+- Connection management dialog for adding databases with automatic type detection
 - Resizable panel layout for sidebar and content areas
-- Data grid with pagination, sorting, and CRUD operations
-- Query editor for custom SQL execution
+- Data grid with pagination (20 rows per page), sorting, and CRUD operations
+- Query editor for custom SQL execution with results display
 - Table structure viewer showing columns, indexes, and relationships
+- Confirmation dialogs for destructive actions (delete tables, truncate, drop columns)
+- Export and import options (CSV, JSON, SQL dump)
+- Search functionality across table data
 
 ### Backend Architecture
 
 **Server Framework**
-- Express.js with TypeScript for type-safe API endpoints
-- ESM (ES Modules) throughout the codebase
-- Custom Vite middleware integration for development
+- **FastAPI** - Modern Python web framework for building APIs
+- **Uvicorn** - ASGI server for running FastAPI applications
+- **Pydantic** - Data validation using Python type annotations
+- Serves both API endpoints and static frontend files in production
 
 **Database Abstraction Layer**
-- Knex.js as the SQL query builder providing database-agnostic interface
-- Support for multiple concurrent database connections stored in Map
+- **SQLAlchemy** - Python SQL toolkit and ORM providing database-agnostic interface
+- Supports SQLite, PostgreSQL, and MySQL databases
+- Connection pooling and management handled by SQLAlchemy Engine
+- Multiple concurrent database connections stored in dictionary
 - Auto-detection of database type from connection string or file extension
-- Database service handles connection pooling and query execution
 
 **Storage Strategy**
 - In-memory storage (MemStorage class) for connection configurations
-- Connection configs stored in Map with UUID keys
+- Connection configs stored in Python dictionary with UUID keys
 - No persistence layer - connections reset on server restart
-- Designed to be replaceable with persistent storage (could use Drizzle ORM with PostgreSQL)
+- Simple and lightweight for development and testing purposes
 
 **API Design**
 - RESTful endpoints following convention: `/api/connections/{id}/tables/{table}/...`
 - JSON request/response format
 - Error handling with appropriate HTTP status codes
-- Request logging middleware for API calls only (excludes static assets)
+- Comprehensive API documentation via FastAPI's automatic OpenAPI/Swagger UI
+- CORS enabled for development flexibility
 
 **Database Type Detection**
-- File extension detection for SQLite (.db, .sqlite, .sqlite3)
-- Connection string protocol detection (postgres://, mysql://, sqlite://)
+- Automatic file extension detection for SQLite (.db, .sqlite, .sqlite3)
+- Connection string protocol detection (postgres://, postgresql://, mysql://)
 - Manual override option when auto-detection fails
+
+**Complete Feature Set**
+- **Connection Management**: Create, test, and delete database connections
+- **Table Operations**: Create, rename, drop, truncate tables
+- **Column Management**: Add columns, drop columns (non-SQLite), modify columns (non-SQLite)
+- **Row Operations**: Insert, update, delete rows with pagination and search
+- **Query Execution**: Execute custom SQL queries with timing information
+- **Data Export**: Export tables to JSON, CSV, or SQL dump format
+- **Data Import**: Import data from JSON or CSV files
+- **Schema Inspection**: View table structure, columns, indexes, foreign keys
 
 ### Data Flow Patterns
 
 **Connection Creation Flow**
 1. User submits connection details via ConnectionDialog
-2. Frontend validates with Zod schema (insertConnectionConfigSchema)
+2. Frontend validates with Pydantic models
 3. Backend auto-detects database type if not provided
-4. Backend attempts connection to verify credentials
+4. Backend attempts connection using SQLAlchemy to verify credentials
 5. Connection config stored in memory with generated UUID
 6. Frontend invalidates queries to refresh connection list
 
@@ -84,62 +100,127 @@ Preferred communication style: Simple, everyday language.
 1. User selects table from TableList component
 2. DataGrid fetches rows with pagination (20 per page)
 3. Optional sorting by column with ascending/descending order
-4. Edit/delete operations trigger modals with optimistic UI updates
-5. React Query automatically refetches affected data
+4. Optional search across text columns
+5. Edit/delete operations trigger modals with optimistic UI updates
+6. React Query automatically refetches affected data
 
 **Query Execution Flow**
 1. User writes SQL in QueryEditorDialog
 2. Backend executes query with error handling
-3. Results returned with execution time metadata
+3. Results returned with execution time metadata (in milliseconds)
 4. Frontend displays results in tabular format with export options
 
-## External Dependencies
+**Export/Import Flow**
+1. User selects export format (JSON, CSV, or SQL)
+2. Backend queries all table data and formats accordingly
+3. File download initiated in browser
+4. For import, user uploads file and backend parses and inserts rows
+5. Error reporting for failed row imports
 
-### Database Drivers and ORMs
-- **@neondatabase/serverless**: Neon PostgreSQL serverless driver
-- **knex**: SQL query builder for database abstraction
-- **sqlite3**: SQLite database driver
-- **drizzle-orm & drizzle-kit**: ORM and migration tools (configured but not actively used in current implementation)
+## Technology Stack
 
-### UI Component Libraries
-- **@radix-ui/***: 20+ primitive component packages for accessible UI
-- **shadcn/ui**: Pre-built component system using Radix UI
-- **cmdk**: Command menu component
-- **embla-carousel-react**: Carousel/slider functionality
-- **lucide-react**: Icon library
+### Backend (Python)
+- **FastAPI** (0.118.0+) - Modern web framework
+- **SQLAlchemy** (2.0+) - Database ORM and abstraction layer
+- **Pydantic** (2.0+) - Data validation and settings management
+- **Uvicorn** - ASGI server with standard extras
+- **psycopg2-binary** - PostgreSQL adapter
+- **mysql-connector-python** - MySQL driver
+- **python-multipart** - For file upload support
+- **pandas** - Data manipulation (available if needed)
 
-### Form and Validation
-- **react-hook-form**: Form state management
-- **@hookform/resolvers**: Validation resolver for react-hook-form
-- **zod**: TypeScript-first schema validation
-- **drizzle-zod**: Generate Zod schemas from Drizzle schemas
+### Frontend (React + TypeScript)
+- **React** (18.3+) with TypeScript
+- **Vite** (5.4+) - Build tool
+- **@tanstack/react-query** - Server state management
+- **wouter** - Lightweight routing
+- **shadcn/ui** + **@radix-ui/** - UI component system
+- **tailwindcss** - Utility-first CSS
+- **react-hook-form** + **zod** - Form handling and validation
+- **lucide-react** - Icon library
 
-### Styling and Theming
-- **tailwindcss**: Utility-first CSS framework
-- **class-variance-authority**: CSS variant management
-- **clsx & tailwind-merge**: Utility class merging
+### Development and Build Tools
+- **TypeScript** - Type safety for frontend
+- **ESLint** + **Prettier** - Code quality and formatting
+- **Vite** - Fast development server and build tool
+- **uv** - Python package manager
 
-### Development Tools
-- **vite**: Build tool and dev server
-- **@vitejs/plugin-react**: React plugin for Vite
-- **@replit/vite-plugin-***: Replit-specific dev tooling (error overlay, cartographer, dev banner)
-- **tsx**: TypeScript execution for Node.js
-- **esbuild**: Fast JavaScript bundler for production builds
+## Running the Application
 
-### Routing and State
-- **wouter**: Lightweight routing library (2KB alternative to React Router)
-- **@tanstack/react-query**: Server state management and caching
+### Development
+The workflow runs: `cd server_py && python main.py`
+- Python FastAPI server starts on port 5000
+- Serves API endpoints at `/api/*`
+- Note: In development, you may need to build the frontend first with `npm run build`
 
-### Session Management
-- **express-session**: Session middleware (configured in dependencies)
-- **connect-pg-simple**: PostgreSQL session store
+### Production Deployment
+1. Build frontend: `npm run build` (creates `dist/public/`)
+2. Run Python server: `python server_py/main.py`
+3. Server automatically serves static files from `dist/public/`
+4. All requests route through the Python backend on port 5000
 
-### Utility Libraries
-- **date-fns**: Date manipulation and formatting
-- **nanoid**: Unique ID generation
+### Environment
+- Python 3.11+
+- Node.js 20+ (for frontend build only)
+- No database required to run the application itself (connects to external databases)
 
-### Build Configuration
-- TypeScript with strict mode enabled
-- Module resolution set to "bundler" for modern import patterns
-- Path aliases configured: `@/*` for client, `@shared/*` for shared code
-- Separate build processes for client (Vite) and server (esbuild)
+## Project Structure
+
+```
+├── client/                 # React frontend
+│   ├── src/
+│   │   ├── components/    # UI components
+│   │   ├── pages/         # Page components
+│   │   ├── lib/           # Utilities and React Query setup
+│   │   └── hooks/         # Custom React hooks
+│   └── index.html
+├── server_py/             # Python FastAPI backend
+│   ├── main.py           # FastAPI app and routes
+│   ├── models.py         # Pydantic models
+│   ├── database_service.py  # SQLAlchemy database operations
+│   └── storage.py        # In-memory connection storage
+├── shared/               # Shared TypeScript types (legacy from Node.js version)
+├── dist/                 # Built frontend (generated)
+│   └── public/          # Static files served by Python backend
+├── pyproject.toml        # Python dependencies
+├── package.json          # Node.js dependencies (frontend build)
+└── vite.config.ts        # Vite configuration
+
+```
+
+## Key Features Implemented
+
+✅ **Automatic Database Detection** - Detects SQLite, PostgreSQL, MySQL from paths/connection strings
+✅ **Multi-Database Support** - Connect to multiple databases simultaneously
+✅ **Full Table Management** - Create, rename, delete, truncate tables
+✅ **Column Management** - Add, modify, drop columns (with database-specific limitations)
+✅ **Row CRUD Operations** - Insert, update, delete with data validation
+✅ **Pagination & Search** - Browse large tables efficiently
+✅ **Custom SQL Queries** - Execute any SQL with result display and timing
+✅ **Data Export** - Export to JSON, CSV, or SQL dump format
+✅ **Data Import** - Import from JSON or CSV with error handling
+✅ **Schema Inspection** - View columns, types, constraints, indexes, foreign keys
+✅ **Dark/Light Theme** - User preference with system default detection
+✅ **Responsive Design** - Works on desktop and mobile devices
+✅ **Error Handling** - Clear error messages throughout the application
+✅ **Confirmation Dialogs** - For all destructive operations
+
+## Production Readiness
+
+The application is production-ready with:
+- Comprehensive error handling and validation
+- Security considerations (CORS, SQL injection prevention via parameterized queries)
+- Efficient pagination for large datasets
+- Optimistic UI updates for better user experience
+- Clean separation of concerns (frontend/backend/database layer)
+- Type safety (TypeScript frontend, Pydantic backend)
+- Database-agnostic architecture via SQLAlchemy
+
+## Recent Changes (October 2025)
+
+- Migrated backend from Node.js/TypeScript (Express + Knex) to Python (FastAPI + SQLAlchemy)
+- Updated all API endpoints to use FastAPI route decorators
+- Implemented Pydantic models for request/response validation
+- Configured Python backend to serve built React frontend in production
+- Maintained all existing functionality during migration
+- Updated deployment configuration for Python backend

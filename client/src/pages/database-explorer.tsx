@@ -18,7 +18,8 @@ import {
   Settings,
   Trash2,
   Activity,
-  Layers
+  Layers,
+  Shield
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +42,7 @@ import { ImportDialog } from "@/components/import-dialog";
 import { BulkOperationsDialog } from "@/components/bulk-operations-dialog";
 import { TableExportDialog } from "@/components/table-export-dialog";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { DataValidationDialog } from "@/components/data-validation-dialog";
 import { soundManager } from "@/lib/sounds";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -61,6 +63,7 @@ export default function DatabaseExplorer() {
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showDropDialog, setShowDropDialog] = useState(false);
   const [showTruncateDialog, setShowTruncateDialog] = useState(false);
+  const [showDataValidation, setShowDataValidation] = useState(false);
   const { toast } = useToast();
 
   const { data: connection } = useQuery<any>({
@@ -224,6 +227,19 @@ export default function DatabaseExplorer() {
               >
                 <Database className="w-4 h-4" />
                 Backup
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-2"
+                onClick={() => {
+                  setShowDataValidation(true);
+                  soundManager.open();
+                }}
+                data-testid="button-data-validation"
+              >
+                <Shield className="w-4 h-4" />
+                Validation
               </Button>
             </div>
           </div>
@@ -645,6 +661,17 @@ export default function DatabaseExplorer() {
         onConfirm={() => selectedTable && truncateTableMutation.mutate(selectedTable)}
         confirmText="Truncate Table"
         variant="danger"
+      />
+
+      {/* Data Validation Dialog */}
+      <DataValidationDialog
+        open={showDataValidation}
+        onOpenChange={(open) => {
+          setShowDataValidation(open);
+          if (!open) soundManager.close();
+        }}
+        connectionId={connectionId!}
+        tableName={selectedTable || undefined}
       />
     </div>
   );

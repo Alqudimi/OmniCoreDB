@@ -5,7 +5,9 @@
   "license": "MIT",
   "scripts": {
     "build": "vite build",
-    "check": "tsc"
+    "check": "tsc",
+    "dev": "python server_py/main.py",
+    "start": "python server_py/main.py"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -763,6 +763,328 @@ class DatabaseService:
             "columns": [{"name": col["name"], "type": str(col["type"])} for col in columns],
             "indexes": [{"name": idx["name"], "columns": idx["column_names"], "unique": idx["unique"]} for idx in indexes]
         }
+    
+    def explain_query(self, connection_id: str, query: str, analyze: bool = False) -> Dict[str, Any]:
+        """Explain/analyze a query to show execution plan"""
+        from storage import storage
+        engine = self.get_connection(connection_id)
+        connection_config = storage.get_connection(connection_id)
+        
+        start_time = time.time()
+        warnings = []
+        
+        with engine.connect() as conn:
+            if connection_config.type == 'postgresql':
+                explain_cmd = f"EXPLAIN (FORMAT JSON, ANALYZE {str(analyze).upper()}) {query}"
+                try:
+                    result = conn.execute(text(explain_cmd))
+                    plan_data = result.scalar()
+                    plan_text = json.dumps(plan_data, indent=2)
+                    
+                    # Extract simplified plan
+                    if isinstance(plan_data, list) and len(plan_data) > 0:
+                        plan_obj = plan_data[0].get("Plan", {})
+                        plan = self._format_postgres_plan(plan_obj)
+                    else:
+                        plan = str(plan_data)
+                        
+                except Exception as e:
+                    # Fallback to simple EXPLAIN
+                    result = conn.execute(text(f"EXPLAIN {query}"))
+                    rows = result.fetchall()
+                    plan_text = "\n".join([row[0] for row in rows])
+                    plan = plan_text
+                    
+            elif connection_config.type == 'mysql':
+                result = conn.execute(text(f"EXPLAIN {query}"))
+                rows = result.fetchall()
+                columns = result.keys()
+                plan_text = "\n".join([str(dict(zip(columns, row))) for row in rows])
+                plan = plan_text
+                
+                # Check for slow operations
+                for row in rows:
+                    row_dict = dict(zip(columns, row))
+                    if row_dict.get('type') == 'ALL':
+                        warnings.append(f"Full table scan detected on table: {row_dict.get('table')}")
+                        
+            else:  # SQLite
+                result = conn.execute(text(f"EXPLAIN QUERY PLAN {query}"))
+                rows = result.fetchall()
+                plan_text = "\n".join([str(row) for row in rows])
+                plan = plan_text
+                
+                # Check for scan operations
+                for row in rows:
+                    if 'SCAN' in str(row).upper():
+                        warnings.append("Table scan detected - consider adding an index")
+        
+        execution_time = time.time() - start_time if analyze else None
+        
+        return {
+            "query": query,
+            "plan": plan,
+            "planText": plan_text,
+            "executionTime": execution_time,
+            "warnings": warnings
+        }
+    
+    def _format_postgres_plan(self, plan: Dict[str, Any], level: int = 0) -> str:
+        """Format PostgreSQL plan for display"""
+        indent = "  " * level
+        node_type = plan.get("Node Type", "Unknown")
+        relation = plan.get("Relation Name", "")
+        
+        result = f"{indent}{node_type}"
+        if relation:
+            result += f" on {relation}"
+        
+        cost = plan.get("Total Cost", "")
+        if cost:
+            result += f" (cost={cost})"
+            
+        result += "\n"
+        
+        # Process child plans
+        for child in plan.get("Plans", []):
+            result += self._format_postgres_plan(child, level + 1)
+            
+        return result
+    
+    def create_backup(self, connection_id: str, tables: Optional[List[str]] = None, 
+                     format: str = "sql", include_schema: bool = True, 
+                     include_data: bool = True) -> Tuple[str, int]:
+        """Create a database backup"""
+        from storage import storage
+        engine = self.get_connection(connection_id)
+        inspector = inspect(engine)
+        connection_config = storage.get_connection(connection_id)
+        
+        # Get tables to backup
+        if tables is None:
+            tables = inspector.get_table_names()
+        
+        backup_data = []
+        
+        if format == "sql":
+            # SQL dump format
+            if include_schema:
+                for table_name in tables:
+                    # Get table schema
+                    columns = inspector.get_columns(table_name)
+                    pk_constraint = inspector.get_pk_constraint(table_name)
+                    
+                    # Create table statement
+                    col_defs = []
+                    for col in columns:
+                        col_def = f"{col['name']} {col['type']}"
+                        if not col.get('nullable', True):
+                            col_def += " NOT NULL"
+                        if col.get('default'):
+                            col_def += f" DEFAULT {col['default']}"
+                        col_defs.append(col_def)
+                    
+                    if pk_constraint and pk_constraint.get('constrained_columns'):
+                        pk_cols = ', '.join(pk_constraint['constrained_columns'])
+                        col_defs.append(f"PRIMARY KEY ({pk_cols})")
+                    
+                    create_stmt = f"CREATE TABLE {table_name} (\n  " + ",\n  ".join(col_defs) + "\n);\n"
+                    backup_data.append(create_stmt)
+            
+            if include_data:
+                for table_name in tables:
+                    with engine.connect() as conn:
+                        result = conn.execute(text(f"SELECT * FROM {table_name}"))
+                        rows = result.fetchall()
+                        columns = result.keys()
+                        
+                        for row in rows:
+                            values = []
+                            for val in row:
+                                if val is None:
+                                    values.append("NULL")
+                                elif isinstance(val, str):
+                                    escaped_val = val.replace('\\', '\\\\').replace("'", "\\'")
+                                    values.append(f"'{escaped_val}'")
+                                elif isinstance(val, (int, float)):
+                                    values.append(str(val))
+                                else:
+                                    values.append(f"'{str(val)}'")
+                            
+                            insert_stmt = f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({', '.join(values)});\n"
+                            backup_data.append(insert_stmt)
+            
+            backup_content = ''.join(backup_data)
+            
+        else:  # JSON format
+            backup_obj = {}
+            for table_name in tables:
+                with engine.connect() as conn:
+                    result = conn.execute(text(f"SELECT * FROM {table_name}"))
+                    rows = result.fetchall()
+                    columns = result.keys()
+                    
+                    table_data = []
+                    for row in rows:
+                        row_dict = dict(zip(columns, row))
+                        # Convert non-serializable types
+                        for key, val in row_dict.items():
+                            if isinstance(val, (datetime,)):
+                                row_dict[key] = val.isoformat()
+                        table_data.append(row_dict)
+                    
+                    backup_obj[table_name] = {
+                        "schema": {
+                            "columns": [{"name": col["name"], "type": str(col["type"])} for col in inspector.get_columns(table_name)]
+                        } if include_schema else None,
+                        "data": table_data if include_data else []
+                    }
+            
+            backup_content = json.dumps(backup_obj, indent=2)
+        
+        return backup_content, len(backup_content)
+    
+    def restore_backup(self, connection_id: str, backup_content: str, format: str = "sql") -> Dict[str, Any]:
+        """Restore from a backup"""
+        engine = self.get_connection(connection_id)
+        
+        if format == "sql":
+            # Execute SQL statements
+            statements = [s.strip() for s in backup_content.split(';') if s.strip()]
+            executed = 0
+            errors = []
+            
+            with engine.connect() as conn:
+                for stmt in statements:
+                    try:
+                        conn.execute(text(stmt))
+                        conn.commit()
+                        executed += 1
+                    except Exception as e:
+                        errors.append(f"Error executing: {stmt[:50]}... - {str(e)}")
+            
+            return {"executed": executed, "errors": errors}
+            
+        else:  # JSON format
+            backup_data = json.loads(backup_content)
+            errors = []
+            
+            with engine.connect() as conn:
+                for table_name, table_data in backup_data.items():
+                    if table_data.get("data"):
+                        for row in table_data["data"]:
+                            try:
+                                columns = list(row.keys())
+                                values = [row[col] for col in columns]
+                                
+                                placeholders = ', '.join([f":{col}" for col in columns])
+                                insert_query = f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({placeholders})"
+                                
+                                conn.execute(text(insert_query), row)
+                                conn.commit()
+                            except Exception as e:
+                                errors.append(f"Error inserting into {table_name}: {str(e)}")
+            
+            return {"restored": len(backup_data), "errors": errors}
+    
+    def validate_data(self, connection_id: str, table_name: str, 
+                      validation_rules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Validate data against rules"""
+        engine = self.get_connection(connection_id)
+        results = []
+        
+        with engine.connect() as conn:
+            for rule in validation_rules:
+                column_name = rule["columnName"]
+                rule_type = rule["ruleType"]
+                
+                violations = []
+                violation_count = 0
+                
+                if rule_type == "required":
+                    # Check for NULL values
+                    result = conn.execute(text(f"SELECT COUNT(*) FROM {table_name} WHERE {column_name} IS NULL"))
+                    violation_count = result.scalar()
+                    
+                    if violation_count > 0:
+                        result = conn.execute(text(f"SELECT * FROM {table_name} WHERE {column_name} IS NULL LIMIT 5"))
+                        violations = [dict(zip(result.keys(), row)) for row in result.fetchall()]
+                
+                elif rule_type == "unique":
+                    # Check for duplicate values
+                    result = conn.execute(text(f"""
+                        SELECT {column_name}, COUNT(*) as count 
+                        FROM {table_name} 
+                        GROUP BY {column_name} 
+                        HAVING COUNT(*) > 1
+                    """))
+                    duplicates = result.fetchall()
+                    violation_count = len(duplicates)
+                    violations = [{"value": row[0], "count": row[1]} for row in duplicates[:5]]
+                
+                elif rule_type == "range":
+                    # Check for values outside range
+                    rule_value = rule.get("ruleValue", "")
+                    if rule_value:
+                        min_val, max_val = rule_value.split(",")
+                        result = conn.execute(text(f"""
+                            SELECT COUNT(*) FROM {table_name} 
+                            WHERE {column_name} < {min_val} OR {column_name} > {max_val}
+                        """))
+                        violation_count = result.scalar()
+                
+                elif rule_type == "custom":
+                    # Custom SQL expression
+                    custom_expr = rule.get("customExpression", "")
+                    if custom_expr:
+                        result = conn.execute(text(f"SELECT COUNT(*) FROM {table_name} WHERE NOT ({custom_expr})"))
+                        violation_count = result.scalar()
+                
+                results.append({
+                    "tableName": table_name,
+                    "columnName": column_name,
+                    "rule": rule_type,
+                    "violationCount": violation_count,
+                    "sampleViolations": violations
+                })
+        
+        return results
+    
+    def get_performance_stats(self, connection_id: str) -> Dict[str, Any]:
+        """Get performance statistics for a connection"""
+        from storage import storage
+        
+        # Get recent query history
+        history = storage.get_query_history(connection_id, limit=100)
+        
+        if not history:
+            return {
+                "totalQueries": 0,
+                "slowQueries": 0,
+                "avgExecutionTime": 0,
+                "p95ExecutionTime": 0,
+                "errorRate": 0
+            }
+        
+        execution_times = [h.executionTime for h in history if h.success]
+        error_count = sum(1 for h in history if not h.success)
+        slow_threshold = 1.0  # 1 second
+        slow_queries = sum(1 for t in execution_times if t > slow_threshold)
+        
+        # Calculate percentiles
+        sorted_times = sorted(execution_times)
+        p95_index = int(len(sorted_times) * 0.95) if sorted_times else 0
+        p95_time = sorted_times[p95_index] if sorted_times else 0
+        
+        avg_time = sum(execution_times) / len(execution_times) if execution_times else 0
+        
+        return {
+            "totalQueries": len(history),
+            "slowQueries": slow_queries,
+            "avgExecutionTime": round(avg_time, 3),
+            "p95ExecutionTime": round(p95_time, 3),
+            "errorRate": round(error_count / len(history), 3) if history else 0
+        }
 
 
 # Global database service instance

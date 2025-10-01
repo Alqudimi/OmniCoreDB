@@ -9,14 +9,14 @@ packages = ["glibcLocales"]
 [deployment]
 deploymentTarget = "autoscale"
 build = ["npm", "run", "build"]
-run = ["python", "server_py/main.py"]
+run = ["npm", "run", "start"]
 
 [[ports]]
 localPort = 5000
 externalPort = 80
 
 [[ports]]
-localPort = 33353
+localPort = 42063
 externalPort = 3000
 
 [env]
@@ -43,7 +43,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd server_py && python main.py"
+args = "npm run dev"
 waitForPort = 5000
 
 [agent]

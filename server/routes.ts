@@ -197,6 +197,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Rename table
+  app.patch("/api/connections/:id/tables/:tableName/rename", async (req, res) => {
+    try {
+      const { id, tableName } = req.params;
+      const { newName } = req.body;
+      
+      if (!newName || typeof newName !== 'string') {
+        return res.status(400).json({ message: "New table name is required" });
+      }
+      
+      await databaseService.renameTable(id, tableName, newName);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  // Truncate table
+  app.post("/api/connections/:id/tables/:tableName/truncate", async (req, res) => {
+    try {
+      const { id, tableName } = req.params;
+      await databaseService.truncateTable(id, tableName);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Add column
+  app.post("/api/connections/:id/tables/:tableName/columns", async (req, res) => {
+    try {
+      const { id, tableName } = req.params;
+      const { name, type, nullable, defaultValue } = req.body;
+      
+      if (!name || !type) {
+        return res.status(400).json({ message: "Column name and type are required" });
+      }
+      
+      await databaseService.addColumn(id, tableName, { name, type, nullable, defaultValue });
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  // Drop column
+  app.delete("/api/connections/:id/tables/:tableName/columns/:columnName", async (req, res) => {
+    try {
+      const { id, tableName, columnName } = req.params;
+      await databaseService.dropColumn(id, tableName, columnName);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Modify column
+  app.patch("/api/connections/:id/tables/:tableName/columns/:columnName", async (req, res) => {
+    try {
+      const { id, tableName, columnName } = req.params;
+      const { newName, type, nullable, defaultValue } = req.body;
+      
+      await databaseService.modifyColumn(id, tableName, columnName, {
+        newName,
+        type,
+        nullable,
+        defaultValue,
+      });
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
   // Export data
   app.get("/api/connections/:id/tables/:tableName/export", async (req, res) => {
     try {
@@ -213,6 +287,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.send(data);
     } catch (error: any) {
       res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Export SQL dump
+  app.get("/api/connections/:id/export/sql", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { tableName } = req.query;
+      
+      const data = await databaseService.exportSQLDump(id, tableName as string | undefined);
+      
+      const filename = tableName ? `${tableName}.sql` : 'database_dump.sql';
+      
+      res.setHeader('Content-Type', 'application/sql');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(data);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Import data
+  app.post("/api/connections/:id/tables/:tableName/import", async (req, res) => {
+    try {
+      const { id, tableName } = req.params;
+      const { format, data } = req.body;
+      
+      if (!format || !data) {
+        return res.status(400).json({ message: "Format and data are required" });
+      }
+      
+      if (!['csv', 'json'].includes(format)) {
+        return res.status(400).json({ message: "Format must be 'csv' or 'json'" });
+      }
+      
+      const result = await databaseService.importData(id, tableName, format, data);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
     }
   });
 

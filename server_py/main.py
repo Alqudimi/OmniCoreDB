@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, PlainTextResponse
 from typing import Optional, Dict, Any
+from datetime import datetime
+import models
 from models import (
     InsertConnectionConfig, CreateTableRequest, RenameTableRequest,
     AddColumnRequest, ModifyColumnRequest, ExecuteQueryRequest,
@@ -168,6 +170,16 @@ async def execute_query(connection_id: str, request: ExecuteQueryRequest):
             True, 
             result.rowCount
         )
+        
+        # Track slow queries (threshold: 1 second)
+        if result.executionTime > 1.0:
+            storage.add_slow_query(
+                connection_id,
+                request.query,
+                result.executionTime,
+                result.rowCount
+            )
+        
         return result.model_dump()
     except Exception as e:
         # Save failed query to history
@@ -436,6 +448,204 @@ async def analyze_table(connection_id: str, table_name: str):
         return analysis
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# Saved Queries Routes
+@app.get("/api/connections/{connection_id}/saved-queries")
+async def get_saved_queries(connection_id: str):
+    """Get all saved queries for a connection"""
+    try:
+        queries = storage.get_saved_queries(connection_id)
+        return [q.model_dump() for q in queries]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/connections/{connection_id}/saved-queries")
+async def create_saved_query(connection_id: str, query_data: models.InsertSavedQuery):
+    """Create a new saved query"""
+    try:
+        saved_query = storage.create_saved_query(connection_id, query_data)
+        return saved_query.model_dump()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/saved-queries/{query_id}")
+async def get_saved_query(query_id: str):
+    """Get a specific saved query"""
+    try:
+        query = storage.get_saved_query(query_id)
+        if not query:
+            raise HTTPException(status_code=404, detail="Saved query not found")
+        return query.model_dump()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/saved-queries/{query_id}")
+async def update_saved_query(query_id: str, query_data: models.InsertSavedQuery):
+    """Update a saved query"""
+    try:
+        updated_query = storage.update_saved_query(query_id, query_data)
+        return updated_query.model_dump()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.delete("/api/saved-queries/{query_id}")
+async def delete_saved_query(query_id: str):
+    """Delete a saved query"""
+    try:
+        storage.delete_saved_query(query_id)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Query EXPLAIN/ANALYZE Routes
+@app.post("/api/connections/{connection_id}/query/explain")
+async def explain_query(connection_id: str, request: models.QueryExplainRequest):
+    """Explain/analyze a query to show execution plan"""
+    try:
+        result = db_service.explain_query(connection_id, request.query, request.analyze)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# Backup and Restore Routes
+@app.post("/api/connections/{connection_id}/backup")
+async def create_backup(connection_id: str, request: models.BackupRequest):
+    """Create a database backup"""
+    try:
+        backup_content, size = db_service.create_backup(
+            connection_id, 
+            tables=request.tables,
+            format=request.format,
+            include_schema=request.includeSchema,
+            include_data=request.includeData
+        )
+        
+        # Save backup metadata
+        table_list = request.tables if request.tables else db_service.get_tables(connection_id)
+        table_names = [t.name for t in table_list] if not request.tables else request.tables
+        
+        metadata = storage.create_backup_metadata(
+            connection_id,
+            f"backup_{connection_id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.{request.format}",
+            request.format,
+            size,
+            table_names
+        )
+        
+        # Return backup file
+        filename = metadata.filename
+        content_type = 'application/sql' if request.format == 'sql' else 'application/json'
+        
+        return Response(
+            content=backup_content,
+            media_type=content_type,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/connections/{connection_id}/restore")
+async def restore_backup(connection_id: str, request: models.RestoreRequest):
+    """Restore from a backup"""
+    try:
+        result = db_service.restore_backup(connection_id, request.backup, request.format)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/connections/{connection_id}/backups")
+async def get_backups(connection_id: str):
+    """Get all backups for a connection"""
+    try:
+        backups = storage.get_backups(connection_id)
+        return [b.model_dump() for b in backups]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Performance Monitoring Routes
+@app.get("/api/connections/{connection_id}/performance/metrics")
+async def get_performance_metrics(connection_id: str):
+    """Get performance metrics for a connection"""
+    try:
+        metrics = db_service.get_performance_stats(connection_id)
+        return metrics
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/connections/{connection_id}/performance/slow-queries")
+async def get_slow_queries(connection_id: str, limit: int = 50):
+    """Get slow queries for a connection"""
+    try:
+        slow_queries = storage.get_slow_queries(connection_id, limit)
+        return [q.model_dump() for q in slow_queries]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Data Validation Routes
+@app.get("/api/connections/{connection_id}/validations")
+async def get_validations(connection_id: str):
+    """Get all validation rules for a connection"""
+    try:
+        validations = storage.get_validations(connection_id)
+        return [v.model_dump() for v in validations]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/connections/{connection_id}/validations")
+async def create_validation(connection_id: str, validation: models.DataValidation):
+    """Create a new validation rule"""
+    try:
+        created = storage.create_validation(connection_id, validation)
+        return created.model_dump()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.delete("/api/validations/{validation_id}")
+async def delete_validation(validation_id: str):
+    """Delete a validation rule"""
+    try:
+        storage.delete_validation(validation_id)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/connections/{connection_id}/tables/{table_name}/validate")
+async def validate_table_data(connection_id: str, table_name: str):
+    """Run validation on table data"""
+    try:
+        # Get validation rules for this connection
+        validations = storage.get_validations(connection_id)
+        
+        # Filter rules for this table
+        table_rules = [v for v in validations if v.tableName == table_name and v.enabled]
+        
+        if not table_rules:
+            return {"message": "No validation rules defined for this table", "results": []}
+        
+        # Convert to dict format for validation
+        rules_dict = [v.model_dump() for v in table_rules]
+        
+        # Run validation
+        results = db_service.validate_data(connection_id, table_name, rules_dict)
+        
+        return {"results": results}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # Serve frontend static files

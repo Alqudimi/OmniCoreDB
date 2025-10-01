@@ -180,3 +180,89 @@ class ConstraintRequest(BaseModel):
     expression: Optional[str] = None
     referencedTable: Optional[str] = None
     referencedColumns: Optional[List[str]] = None
+
+
+class SavedQuery(BaseModel):
+    id: str
+    connectionId: str
+    name: str
+    query: str
+    description: Optional[str] = None
+    parameters: Optional[Dict[str, str]] = None
+    tags: List[str] = []
+    createdAt: str
+    updatedAt: str
+    favorite: bool = False
+
+
+class InsertSavedQuery(BaseModel):
+    name: str
+    query: str
+    description: Optional[str] = None
+    parameters: Optional[Dict[str, str]] = None
+    tags: List[str] = []
+    favorite: bool = False
+
+
+class QueryExplainRequest(BaseModel):
+    query: str
+    analyze: bool = False
+
+
+class QueryExplainResult(BaseModel):
+    query: str
+    plan: str
+    planText: str
+    executionTime: Optional[float] = None
+    rowsAffected: Optional[int] = None
+    warnings: List[str] = []
+
+
+class PerformanceMetrics(BaseModel):
+    connectionId: str
+    timestamp: str
+    totalQueries: int
+    slowQueries: int
+    avgExecutionTime: float
+    p95ExecutionTime: float
+    errorRate: float
+    activeConnections: int
+
+
+class SlowQuery(BaseModel):
+    id: str
+    connectionId: str
+    query: str
+    executionTime: float
+    timestamp: str
+    rowCount: Optional[int] = None
+
+
+class DataValidation(BaseModel):
+    id: str
+    connectionId: str
+    tableName: str
+    columnName: str
+    ruleType: Literal["required", "unique", "range", "pattern", "custom"]
+    ruleValue: Optional[str] = None
+    customExpression: Optional[str] = None
+    enabled: bool = True
+
+
+class ValidationResult(BaseModel):
+    tableName: str
+    columnName: str
+    rule: str
+    violationCount: int
+    sampleViolations: List[Dict[str, Any]] = []
+
+
+class BackupMetadata(BaseModel):
+    id: str
+    connectionId: str
+    filename: str
+    format: Literal["sql", "json"]
+    size: int
+    timestamp: str
+    tables: List[str]
+    status: Literal["pending", "completed", "failed"]

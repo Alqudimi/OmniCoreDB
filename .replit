@@ -8,7 +8,7 @@ packages = ["glibcLocales"]
 
 [deployment]
 deploymentTarget = "autoscale"
-build = ["sh", "-c", "npm run build && uv sync"]
+build = ["npm", "run", "build"]
 run = ["uv", "run", "python", "server_py/main.py"]
 
 [[ports]]
@@ -16,8 +16,8 @@ localPort = 5000
 externalPort = 80
 
 [[ports]]
-localPort = 40371
-externalPort = 3001
+localPort = 37971
+externalPort = 3000
 
 [[ports]]
 localPort = 40691
@@ -36,19 +36,19 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Start application"
+args = "FastAPI Backend"
 
 [[workflows.workflow]]
-name = "Start application"
+name = "FastAPI Backend"
 author = "agent"
-
-[workflows.workflow.metadata]
-outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "uv run python server_py/main.py"
 waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
 
 [agent]
 expertMode = true

@@ -48,6 +48,7 @@ Preferred communication style: Simple, everyday language.
 - **Saved Queries Dialog**: Save, manage, and execute frequently used SQL queries
 - **Performance Monitoring Dialog**: View metrics, track slow queries, and monitor database performance
 - **Backup & Restore Dialog**: Create backups in JSON or SQL format with schema/data options
+- **Data Validation Dialog**: Create and manage validation rules for table columns with support for NOT NULL, UNIQUE, CHECK constraints, and custom SQL expressions
 
 **Enhanced UI/UX**
 - Modern animations including shimmer, glow, pulse, and gradient-shift effects
@@ -96,6 +97,7 @@ Preferred communication style: Simple, everyday language.
 - **Column Management**: Add columns, drop columns (non-SQLite), modify columns (non-SQLite)
 - **Row Operations**: Insert, update, delete rows with pagination and search
 - **Query Execution**: Execute custom SQL queries with timing information
+- **Data Validation**: Create validation rules with NOT NULL, UNIQUE, CHECK constraints and run validation checks
 - **Data Export**: Export tables to JSON, CSV, or SQL dump format
 - **Data Import**: Import data from JSON or CSV files
 - **Schema Inspection**: View table structure, columns, indexes, foreign keys

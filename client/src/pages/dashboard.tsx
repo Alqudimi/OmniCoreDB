@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { ConnectionDialog } from "@/components/connection-dialog";
 import { TableList } from "@/components/table-list";
@@ -8,7 +8,19 @@ import { TableStructure } from "@/components/table-structure";
 import { InsertRowDialog } from "@/components/insert-row-dialog";
 import { DeleteDialog } from "@/components/delete-dialog";
 import { QueryEditorDialog } from "@/components/query-editor-dialog";
+import { TableManagementDialog } from "@/components/table-management-dialog";
+import { ImportDialog } from "@/components/import-dialog";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { useTheme } from "@/components/theme-provider";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { 
   Database, 
   Plus, 
@@ -17,7 +29,14 @@ import {
   Moon, 
   Sun, 
   Settings,
-  Table as TableIcon
+  Table as TableIcon,
+  Upload,
+  MoreVertical,
+  Edit,
+  Trash,
+  FileJson,
+  FileText,
+  FileCode
 } from "lucide-react";
 import { Connection, ColumnMetadata, TableMetadata } from "@/lib/types";
 
@@ -26,12 +45,20 @@ export default function Dashboard() {
   const [insertRowDialogOpen, setInsertRowDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [queryEditorOpen, setQueryEditorOpen] = useState(false);
+  const [tableManagementDialogOpen, setTableManagementDialogOpen] = useState(false);
+  const [tableManagementMode, setTableManagementMode] = useState<'create' | 'rename'>('create');
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [deleteTableConfirmOpen, setDeleteTableConfirmOpen] = useState(false);
+  const [tableToDelete, setTableToDelete] = useState<string | null>(null);
+  const [truncateTableConfirmOpen, setTruncateTableConfirmOpen] = useState(false);
   const [selectedConnection, setSelectedConnection] = useState<string | null>(null);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [rowToDelete, setRowToDelete] = useState<any>(null);
   const [rowToEdit, setRowToEdit] = useState<any>(null);
   
   const { theme, setTheme } = useTheme();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: connections } = useQuery<Connection[]>({
     queryKey: ['/api/connections'],
@@ -56,6 +83,55 @@ export default function Dashboard() {
   const currentTable = tables?.find((t: any) => t.name === selectedTable);
   const primaryKeyColumn = columns?.find(c => c.primaryKey)?.name || 'id';
 
+  const deleteTableMutation = useMutation({
+    mutationFn: async (tableName: string) => {
+      const res = await apiRequest('DELETE', `/api/connections/${selectedConnection}/tables/${tableName}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/connections', selectedConnection, 'tables'] });
+      toast({
+        title: "Success",
+        description: "Table deleted successfully",
+      });
+      if (selectedTable === tableToDelete) {
+        setSelectedTable(null);
+      }
+      setDeleteTableConfirmOpen(false);
+      setTableToDelete(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const truncateTableMutation = useMutation({
+    mutationFn: async (tableName: string) => {
+      const res = await apiRequest('POST', `/api/connections/${selectedConnection}/tables/${tableName}/truncate`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/connections', selectedConnection, 'tables'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/connections', selectedConnection, 'tables', selectedTable, 'rows'] });
+      toast({
+        title: "Success",
+        description: "Table truncated successfully",
+      });
+      setTruncateTableConfirmOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleEditRow = (row: any) => {
     setRowToEdit(row);
     setInsertRowDialogOpen(true);
@@ -66,25 +142,74 @@ export default function Dashboard() {
     setDeleteDialogOpen(true);
   };
 
-  const handleExport = async (format: 'csv' | 'json') => {
+  const handleCreateTable = () => {
+    setTableManagementMode('create');
+    setTableManagementDialogOpen(true);
+  };
+
+  const handleRenameTable = () => {
+    setTableManagementMode('rename');
+    setTableManagementDialogOpen(true);
+  };
+
+  const handleDeleteTable = () => {
+    setTableToDelete(selectedTable);
+    setDeleteTableConfirmOpen(true);
+  };
+
+  const confirmDeleteTable = () => {
+    if (tableToDelete) {
+      deleteTableMutation.mutate(tableToDelete);
+    }
+  };
+
+  const handleTruncateTable = () => {
+    setTruncateTableConfirmOpen(true);
+  };
+
+  const confirmTruncateTable = () => {
+    if (selectedTable) {
+      truncateTableMutation.mutate(selectedTable);
+    }
+  };
+
+  const handleExport = async (format: 'csv' | 'json' | 'sql') => {
     if (!selectedConnection || !selectedTable) return;
     
     try {
-      const res = await fetch(
-        `/api/connections/${selectedConnection}/tables/${selectedTable}/export?format=${format}`
-      );
+      let url: string;
+      let filename: string;
+
+      if (format === 'sql') {
+        url = `/api/connections/${selectedConnection}/export/sql?tableName=${selectedTable}`;
+        filename = `${selectedTable}.sql`;
+      } else {
+        url = `/api/connections/${selectedConnection}/tables/${selectedTable}/export?format=${format}`;
+        filename = `${selectedTable}.${format}`;
+      }
+
+      const res = await fetch(url);
       
       if (!res.ok) throw new Error('Export failed');
       
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+      const blobUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = url;
-      link.download = `${selectedTable}.${format}`;
+      link.href = blobUrl;
+      link.download = filename;
       link.click();
-      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(blobUrl);
+
+      toast({
+        title: "Success",
+        description: `Exported ${selectedTable} as ${format.toUpperCase()}`,
+      });
     } catch (error) {
-      console.error('Export error:', error);
+      toast({
+        title: "Export Failed",
+        description: "Failed to export data",
+        variant: "destructive",
+      });
     }
   };
 
@@ -124,14 +249,41 @@ export default function Dashboard() {
             SQL Query
           </Button>
 
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="secondary"
+                disabled={!selectedTable}
+                data-testid="button-export-menu"
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => handleExport('json')} data-testid="menu-export-json">
+                <FileJson className="mr-2 h-4 w-4" />
+                Export as JSON
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('csv')} data-testid="menu-export-csv">
+                <FileText className="mr-2 h-4 w-4" />
+                Export as CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('sql')} data-testid="menu-export-sql">
+                <FileCode className="mr-2 h-4 w-4" />
+                Export as SQL Dump
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <Button
             variant="secondary"
-            onClick={() => handleExport('json')}
+            onClick={() => setImportDialogOpen(true)}
             disabled={!selectedTable}
-            data-testid="button-export"
+            data-testid="button-import"
           >
-            <Download className="mr-2 h-4 w-4" />
-            Export
+            <Upload className="mr-2 h-4 w-4" />
+            Import
           </Button>
 
           <Button
@@ -153,7 +305,7 @@ export default function Dashboard() {
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar */}
         <aside className="w-64 border-r border-border bg-card flex flex-col">
-          <div className="p-4 border-b border-border">
+          <div className="p-4 border-b border-border space-y-2">
             <Button
               className="w-full"
               onClick={() => setConnectionDialogOpen(true)}
@@ -161,6 +313,16 @@ export default function Dashboard() {
             >
               <Plus className="mr-2 h-4 w-4" />
               New Connection
+            </Button>
+            <Button
+              className="w-full"
+              variant="outline"
+              onClick={handleCreateTable}
+              disabled={!selectedConnection}
+              data-testid="button-create-table"
+            >
+              <TableIcon className="mr-2 h-4 w-4" />
+              Create Table
             </Button>
           </div>
 
@@ -206,6 +368,33 @@ export default function Dashboard() {
                     <Plus className="mr-2 h-4 w-4" />
                     Insert Row
                   </Button>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" data-testid="button-table-options">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={handleRenameTable} data-testid="menu-rename-table">
+                        <Edit className="mr-2 h-4 w-4" />
+                        Rename Table
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleTruncateTable} data-testid="menu-truncate-table">
+                        <Trash className="mr-2 h-4 w-4" />
+                        Truncate Table
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem 
+                        onClick={handleDeleteTable} 
+                        className="text-destructive focus:text-destructive"
+                        data-testid="menu-delete-table"
+                      >
+                        <Trash className="mr-2 h-4 w-4" />
+                        Delete Table
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
 
@@ -272,6 +461,45 @@ export default function Dashboard() {
           connectionId={selectedConnection}
         />
       )}
+
+      {selectedConnection && (
+        <TableManagementDialog
+          open={tableManagementDialogOpen}
+          onOpenChange={setTableManagementDialogOpen}
+          connectionId={selectedConnection}
+          mode={tableManagementMode}
+          currentTableName={selectedTable || undefined}
+        />
+      )}
+
+      {selectedConnection && selectedTable && (
+        <ImportDialog
+          open={importDialogOpen}
+          onOpenChange={setImportDialogOpen}
+          connectionId={selectedConnection}
+          tableName={selectedTable}
+        />
+      )}
+
+      <ConfirmationDialog
+        open={deleteTableConfirmOpen}
+        onOpenChange={setDeleteTableConfirmOpen}
+        title="Delete Table"
+        description={`Are you sure you want to delete the table "${tableToDelete}"? This action cannot be undone and all data will be permanently lost.`}
+        onConfirm={confirmDeleteTable}
+        confirmText="Delete Table"
+        variant="danger"
+      />
+
+      <ConfirmationDialog
+        open={truncateTableConfirmOpen}
+        onOpenChange={setTruncateTableConfirmOpen}
+        title="Truncate Table"
+        description={`Are you sure you want to truncate the table "${selectedTable}"? All rows will be deleted but the table structure will remain. This action cannot be undone.`}
+        onConfirm={confirmTruncateTable}
+        confirmText="Truncate Table"
+        variant="warning"
+      />
     </div>
   );
 }

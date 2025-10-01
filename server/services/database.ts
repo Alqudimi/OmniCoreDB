@@ -488,6 +488,100 @@ export class DatabaseService {
     await db.schema.dropTable(tableName);
   }
 
+  async renameTable(connectionId: string, oldTableName: string, newTableName: string): Promise<void> {
+    const db = this.getConnection(connectionId);
+    await db.schema.renameTable(oldTableName, newTableName);
+  }
+
+  async truncateTable(connectionId: string, tableName: string): Promise<void> {
+    const db = this.getConnection(connectionId);
+    await db(tableName).truncate();
+  }
+
+  async addColumn(connectionId: string, tableName: string, column: { 
+    name: string; 
+    type: string; 
+    nullable?: boolean; 
+    defaultValue?: any;
+  }): Promise<void> {
+    const db = this.getConnection(connectionId);
+    
+    await db.schema.table(tableName, (table) => {
+      let col;
+      
+      const type = column.type.toLowerCase();
+      if (type.includes('int')) {
+        col = table.integer(column.name);
+      } else if (type.includes('varchar') || type.includes('text') || type.includes('string')) {
+        col = table.string(column.name);
+      } else if (type.includes('decimal') || type.includes('numeric') || type.includes('float') || type.includes('double')) {
+        col = table.decimal(column.name);
+      } else if (type.includes('bool')) {
+        col = table.boolean(column.name);
+      } else if (type.includes('date')) {
+        col = table.date(column.name);
+      } else if (type.includes('time')) {
+        col = table.timestamp(column.name);
+      } else if (type.includes('json')) {
+        col = table.json(column.name);
+      } else {
+        col = table.string(column.name);
+      }
+
+      if (column.nullable === false) {
+        col.notNullable();
+      } else {
+        col.nullable();
+      }
+      
+      if (column.defaultValue !== undefined) {
+        col.defaultTo(column.defaultValue);
+      }
+    });
+  }
+
+  async dropColumn(connectionId: string, tableName: string, columnName: string): Promise<void> {
+    const db = this.getConnection(connectionId);
+    await db.schema.table(tableName, (table) => {
+      table.dropColumn(columnName);
+    });
+  }
+
+  async modifyColumn(connectionId: string, tableName: string, columnName: string, changes: {
+    newName?: string;
+    type?: string;
+    nullable?: boolean;
+    defaultValue?: any;
+  }): Promise<void> {
+    const db = this.getConnection(connectionId);
+    const client = db.client.config.client;
+
+    if (client === 'sqlite3') {
+      throw new Error('SQLite does not support column modification directly. You need to recreate the table.');
+    }
+
+    await db.schema.table(tableName, (table) => {
+      if (changes.newName) {
+        table.renameColumn(columnName, changes.newName);
+      }
+      
+      if (changes.type) {
+        const type = changes.type.toLowerCase();
+        if (type.includes('int')) {
+          table.integer(columnName).alter();
+        } else if (type.includes('varchar') || type.includes('text') || type.includes('string')) {
+          table.string(columnName).alter();
+        } else if (type.includes('decimal') || type.includes('numeric')) {
+          table.decimal(columnName).alter();
+        } else if (type.includes('bool')) {
+          table.boolean(columnName).alter();
+        } else if (type.includes('date') || type.includes('time')) {
+          table.timestamp(columnName).alter();
+        }
+      }
+    });
+  }
+
   async exportData(connectionId: string, tableName: string, format: 'csv' | 'json'): Promise<string> {
     const { rows } = await this.getRows(connectionId, tableName);
 
@@ -513,6 +607,115 @@ export class DatabaseService {
       );
       
       return [header, ...csvRows].join('\n');
+    }
+  }
+
+  async exportSQLDump(connectionId: string, tableName?: string): Promise<string> {
+    const db = this.getConnection(connectionId);
+    const client = db.client.config.client;
+    let sqlDump = '';
+
+    const tablesToExport = tableName ? [tableName] : (await this.getTables(connectionId)).map(t => t.name);
+
+    for (const table of tablesToExport) {
+      const columns = await this.getColumns(connectionId, table);
+      const { rows } = await this.getRows(connectionId, table);
+
+      sqlDump += `-- Table: ${table}\n`;
+      sqlDump += `DROP TABLE IF EXISTS "${table}";\n`;
+      
+      sqlDump += `CREATE TABLE "${table}" (\n`;
+      const columnDefs = columns.map(col => {
+        let def = `  "${col.name}" ${col.type}`;
+        if (!col.nullable) def += ' NOT NULL';
+        if (col.primaryKey) def += ' PRIMARY KEY';
+        if (col.autoIncrement && client === 'sqlite3') def += ' AUTOINCREMENT';
+        if (col.defaultValue !== null && col.defaultValue !== undefined) {
+          def += ` DEFAULT ${col.defaultValue}`;
+        }
+        return def;
+      });
+      sqlDump += columnDefs.join(',\n');
+      sqlDump += `\n);\n\n`;
+
+      if (rows.length > 0) {
+        for (const row of rows) {
+          const cols = Object.keys(row).map(k => `"${k}"`).join(', ');
+          const vals = Object.values(row).map(v => {
+            if (v === null || v === undefined) return 'NULL';
+            if (typeof v === 'string') return `'${v.replace(/'/g, "''")}'`;
+            return v;
+          }).join(', ');
+          sqlDump += `INSERT INTO "${table}" (${cols}) VALUES (${vals});\n`;
+        }
+        sqlDump += '\n';
+      }
+    }
+
+    return sqlDump;
+  }
+
+  async importData(connectionId: string, tableName: string, format: 'csv' | 'json', data: string): Promise<{ imported: number; errors: string[] }> {
+    const db = this.getConnection(connectionId);
+    const errors: string[] = [];
+    let imported = 0;
+
+    try {
+      let rows: any[] = [];
+
+      if (format === 'json') {
+        try {
+          const parsed = JSON.parse(data);
+          rows = Array.isArray(parsed) ? parsed : [parsed];
+        } catch (e) {
+          throw new Error('Invalid JSON format');
+        }
+      } else if (format === 'csv') {
+        const lines = data.split('\n').filter(line => line.trim());
+        if (lines.length < 2) {
+          throw new Error('CSV must have at least header and one data row');
+        }
+
+        const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+        
+        for (let i = 1; i < lines.length; i++) {
+          const values: string[] = [];
+          let currentValue = '';
+          let insideQuotes = false;
+
+          for (const char of lines[i]) {
+            if (char === '"') {
+              insideQuotes = !insideQuotes;
+            } else if (char === ',' && !insideQuotes) {
+              values.push(currentValue.trim().replace(/^"|"$/g, '').replace(/""/g, '"'));
+              currentValue = '';
+            } else {
+              currentValue += char;
+            }
+          }
+          values.push(currentValue.trim().replace(/^"|"$/g, '').replace(/""/g, '"'));
+
+          const row: any = {};
+          headers.forEach((header, index) => {
+            const val = values[index];
+            row[header] = val === '' || val === 'NULL' ? null : val;
+          });
+          rows.push(row);
+        }
+      }
+
+      for (const row of rows) {
+        try {
+          await db(tableName).insert(row);
+          imported++;
+        } catch (e: any) {
+          errors.push(`Row ${imported + 1}: ${e.message}`);
+        }
+      }
+
+      return { imported, errors };
+    } catch (error: any) {
+      throw new Error(`Import failed: ${error.message}`);
     }
   }
 }

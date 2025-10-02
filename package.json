@@ -1,13 +1,13 @@
 {
-  "name": "rest-express",
+  "name": "omni-core-db-manager",
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
   "scripts": {
     "build": "vite build",
     "check": "tsc",
-    "dev": "python server_py/main.py",
-    "start": "python server_py/main.py"
+    "dev": "uv run python server_py/main.py & vite",
+    "start": "PORT=5000 uv run python server_py/main.py"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

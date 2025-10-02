@@ -1,0 +1,7 @@
+fastapi>=0.118.0
+mysql-connector-python>=9.4.0
+pandas>=2.3.3
+psycopg2-binary>=2.9.10
+python-multipart>=0.0.20
+sqlalchemy>=2.0.43
+uvicorn[standard]>=0.37.0

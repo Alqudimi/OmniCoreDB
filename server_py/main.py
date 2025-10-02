@@ -17,7 +17,7 @@ from storage import storage
 import os
 
 
-app = FastAPI(title="Universal DB Manager API")
+app = FastAPI(title="Omni Core DB Manager API")
 
 # Enable CORS
 app.add_middleware(
@@ -680,4 +680,10 @@ if os.path.exists(dist_path):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=5000)
+    import os
+    
+    # Use port 5000 for production, 8000 for development
+    port = int(os.getenv("PORT", "8000"))
+    host = "0.0.0.0" if port == 5000 else "127.0.0.1"
+    
+    uvicorn.run(app, host=host, port=port)

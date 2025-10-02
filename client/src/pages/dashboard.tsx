@@ -220,7 +220,7 @@ export default function Dashboard() {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3">
             <Database className="text-primary text-xl" />
-            <h1 className="text-lg font-semibold">Universal DB Manager</h1>
+            <h1 className="text-lg font-semibold">Omni Core DB Manager</h1>
           </div>
 
           {currentConnection && (

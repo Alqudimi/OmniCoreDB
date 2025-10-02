@@ -1,3 +1,172 @@
+# Omni Core DB Manager
+
+A comprehensive full-stack database management application providing a visual interface for connecting to and managing multiple database types, including SQLite, PostgreSQL, and MySQL.
+
+## 📋 Overview
+
+Omni Core DB Manager is a powerful database administration tool that allows users to browse tables, view and edit data, execute custom queries, and export/import data with ease. The application offers a robust and user-friendly experience for database administration with modern UI and comprehensive features.
+
+## ✄1�7 Features
+
+### Core Functionality
+- **Multi-Database Support**: SQLite, PostgreSQL, and MySQL
+- **Automatic Database Detection**: Smart detection of database types
+- **Connection Management**: Manage multiple database connections simultaneously
+- **Table Operations**: Create, rename, drop, and truncate tables
+- **Column Management**: Add, modify, and delete columns
+- **Row Operations**: Full CRUD (Create, Read, Update, Delete) support
+- **Advanced Search & Pagination**: Efficient data browsing
+- **Custom SQL Queries**: Execute queries with syntax highlighting
+- **Query History**: Track and review past queries
+- **Saved Queries**: Save frequently used queries
+
+### Advanced Features
+- **Bulk Operations**: Insert, update, and delete multiple rows
+- **Data Export/Import**: Support for JSON, CSV, and SQL dump formats
+- **Schema Inspection**: Detailed table structure visualization
+- **Table Relationships**: View foreign key relationships
+- **Index Management**: Create and manage database indexes
+- **Constraint Management**: Handle primary keys, foreign keys, unique, and check constraints
+- **Table Analysis**: Get detailed statistics and insights
+- **Performance Monitoring**: Track slow queries and performance metrics
+- **Data Validation**: Define and enforce validation rules
+- **Backup & Restore**: Create and restore database backups
+
+### User Interface
+- **Dark/Light Theme**: Toggle between modes
+- **7 Theme Color Palettes**: Customize your experience
+- **Responsive Design**: Works on all devices
+- **Modern Animations**: Smooth transitions and effects
+- **Glass Morphism Effects**: Beautiful UI design
+- **Sound Effects**: Interactive audio feedback
+
+## 🏗︄1�7 Architecture
+
+### Frontend
+- **React 18+** with **TypeScript**
+- **Vite** for building and development
+- **shadcn/ui** components (New York style)
+- **Tailwind CSS** for styling
+- **TanStack Query** for server state management
+- **wouter** for routing
+- **react-hook-form** & **Zod** for form handling and validation
+
+### Backend
+- **FastAPI** with **Uvicorn**
+- **SQLAlchemy** as database abstraction layer
+- **Pydantic** for data validation
+- Support for **SQLite**, **PostgreSQL**, and **MySQL**
+- In-memory connection storage
+- RESTful API with OpenAPI/Swagger documentation
+
+## 🚀 Getting Started
+
+### Prerequisites
+- **Node.js** 20 or higher
+- **Python** 3.11 or higher
+- **uv** package manager (for Python)
+
+### Installation
+
+1. Clone the repository:
+```bash
+git clone https://github.com/Alqudimi/OmniCoreDB.git
+cd OmniCoreDB
+```
+
+2. Install Node.js dependencies:
+```bash
+npm install
+```
+
+3. Install Python dependencies:
+```bash
+uv sync
+```
+
+### Development
+
+Run the development server:
+```bash
+npm run dev
+```
+
+This will start:
+- Backend API on `http://localhost:8000`
+- Frontend on `http://localhost:5000`
+
+### Production Build
+
+1. Build the frontend:
+```bash
+npm run build
+```
+
+2. Start the production server:
+```bash
+npm run start
+```
+
+The application will be served on port 5000.
+
+## 📚 Documentation
+
+### Arabic Documentation (التوثيق العربي)
+Comprehensive documentation is available in the `/docs` folder in Arabic, including:
+
+- **[Main Index](docs/README_AR.md)** - فهرس التوثيق الرئيسي
+- **[Installation Guide](docs/installation.md)** - دليل التثبيت
+- **[Quick Start](docs/quick-start.md)** - دليل البدء السريع
+- **[User Guide](docs/user-guide.md)** - دليل المستخدم
+- **[Advanced Features](docs/advanced-features.md)** - الميزات المتقدمة
+- **[API Reference](docs/api-reference.md)** - مرجع API
+- **[Developer Guide](docs/developer-guide.md)** - دليل المطور
+- **[Troubleshooting](docs/troubleshooting.md)** - استكشاف الأخطاء وإصلاحها
+- **[FAQ](docs/faq.md)** - الأسئلة الشائعة
+
+## 🛠︄1�7 Tech Stack
+
+**Frontend:**
+- React
+- TypeScript
+- Vite
+- Tailwind CSS
+- shadcn/ui
+- TanStack Query
+- Wouter
+- Zod
+- React Hook Form
+
+**Backend:**
+- FastAPI
+- SQLAlchemy
+- Pydantic
+- Uvicorn
+- psycopg2-binary (PostgreSQL)
+- mysql-connector-python (MySQL)
+- pandas
+
+## 📝 License
+
+All rights reserved to **Alqudimi Technology** © 2024
+
+## 👨‍💄1�7 Author
+
+**Abdulaziz Alqudimi**
+- Email: eng7mi@gmail.com, alqudimitechnology@gmail.com
+- GitHub: [@Alqudimi](https://github.com/Alqudimi)
+
+## 🔗 Repository
+
+[https://github.com/Alqudimi/OmniCoreDB](https://github.com/Alqudimi/OmniCoreDB)
+
+## 🙏 Acknowledgments
+
+This project leverages modern web technologies and best practices to provide a powerful database management solution.
+
+---
+
+For detailed documentation in Arabic, please refer to the `/docs` directory.
 # Database Management Application - Features & Roadmap
 
 ## Current Features (Implemented)
@@ -65,7 +234,7 @@
 - **Drop Constraints** - Remove existing constraints
 - **View All Constraints** - List all table constraints
 
-### Saved Queries ✨ NEW
+### Saved Queries �7�8 NEW
 - **Save Queries** - Store frequently-used queries with names and descriptions
 - **Query Parameters** - Define parameterized queries for reusability
 - **Query Tags** - Organize queries with custom tags
@@ -74,7 +243,7 @@
 - **Delete Queries** - Remove saved queries
 - **List Saved Queries** - View all saved queries for a connection
 
-### Query Performance Profiling ✨ NEW
+### Query Performance Profiling �7�8 NEW
 - **EXPLAIN Queries** - View query execution plans
 - **ANALYZE Queries** - Get detailed performance analysis with timing
 - **PostgreSQL JSON Plans** - Formatted execution plan trees
@@ -82,7 +251,7 @@
 - **SQLite Query Plans** - EXPLAIN QUERY PLAN output
 - **Performance Warnings** - Automatic detection of inefficient operations
 
-### Backup & Restore ✨ NEW
+### Backup & Restore �7�8 NEW
 - **Create Backups** - Full database backup in SQL or JSON format
 - **Selective Backup** - Backup specific tables only
 - **Schema-Only Backup** - Export structure without data
@@ -91,7 +260,7 @@
 - **Backup Metadata** - Track backup history with sizes and timestamps
 - **Download Backups** - Export backup files for offline storage
 
-### Performance Monitoring ✨ NEW
+### Performance Monitoring �7�8 NEW
 - **Real-Time Metrics** - Monitor query performance statistics
 - **Average Execution Time** - Track mean query duration
 - **P95 Latency** - 95th percentile execution time
@@ -101,7 +270,7 @@
 - **Slow Query Log** - Historical list of performance bottlenecks
 - **Performance History** - Time-series metrics data
 
-### Data Validation & Integrity ✨ NEW
+### Data Validation & Integrity �7�8 NEW
 - **Define Validation Rules** - Create data quality checks
 - **Required Field Validation** - Check for NULL values
 - **Unique Value Validation** - Detect duplicate values
@@ -287,4 +456,4 @@
 ---
 
 Last Updated: October 1, 2025
-Version: 2.0.0
+Version: 2.2.3

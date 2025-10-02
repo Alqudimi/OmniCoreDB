@@ -37,7 +37,7 @@ class DatabaseService:
     def connect(self, config: ConnectionConfig) -> None:
         """Create a database connection"""
         if config.type == 'sqlite':
-            db_path = config.filePath or config.connectionString.replace('sqlite://', '') if config.connectionString else ':memory:'
+            db_path = config.filePath or (config.connectionString.replace('sqlite://', '') if config.connectionString else ':memory:')
             connection_url = f"sqlite:///{db_path}"
         elif config.type == 'postgresql':
             if config.connectionString:
